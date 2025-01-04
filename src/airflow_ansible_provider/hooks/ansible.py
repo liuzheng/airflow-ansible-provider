@@ -54,7 +54,7 @@ class AnsibleHook(BaseHook):
     """
     This hook also lets you create ssh tunnel and serve as basis for SFTP file transfer.
 
-    :param ssh_conn_id: :ref:`ssh connection id<howto/connection:ssh>` from airflow
+    :param conn_id: :ref:`ssh connection id<howto/connection:ssh>` from airflow
         Connections from where all the required parameters can be fetched like
         username, password or key_file, though priority is given to the
         params passed during init.
@@ -189,7 +189,7 @@ class AnsibleHook(BaseHook):
 
     def __init__(
         self,
-        ssh_conn_id: str | None = None,
+        conn_id: str | None = None,
         remote_host: str = "",
         username: str | None = None,
         password: str | None = None,
@@ -208,7 +208,7 @@ class AnsibleHook(BaseHook):
         ansible_artifact_directory: str | None = None,
     ) -> None:
         super().__init__()
-        self.ssh_conn_id = ssh_conn_id
+        self.ssh_conn_id = conn_id
         self.remote_host = remote_host
         self.username = username
         self.password = password

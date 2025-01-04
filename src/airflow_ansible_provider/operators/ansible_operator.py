@@ -160,7 +160,7 @@ class AnsibleOperator(BaseOperator):
         self.log.debug("playbook: %s", self.playbook)
         self.log.debug("playbook type: %s", type(self.playbook))
 
-        self._ansible_hook = AnsibleHook(ssh_conn_id=conn_id)
+        self._ansible_hook = AnsibleHook(conn_id=conn_id)
         self.extravars["ansible_user"] = self._ansible_hook.username
         self.extravars["ansible_port"] = self._ansible_hook.port
         self.extravars["ansible_connection"] = "ssh"
