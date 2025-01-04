@@ -94,7 +94,7 @@ class AnsibleOperator(BaseOperator):
         "ansible_vars",
     )
     template_fields_renderers = {
-        "ansible_conn_id": "ansible_conn_id",
+        "conn_id": "ansible_conn_id",
         # "kms_keys": None,
         "path": "",
         "inventory": None,
@@ -115,7 +115,7 @@ class AnsibleOperator(BaseOperator):
         self,
         *,
         playbook: str = "",
-        ansible_conn_id: str = "ansible_conn_id",
+        conn_id: str = "ansible_conn_id",
         # kms_keys: Union[list, None] = None,
         path: str = "",
         inventory: Union[dict, str, list, None] = None,
@@ -160,7 +160,7 @@ class AnsibleOperator(BaseOperator):
         self.log.debug("playbook: %s", self.playbook)
         self.log.debug("playbook type: %s", type(self.playbook))
 
-        self._ansible_hook = AnsibleHook(ssh_conn_id=ansible_conn_id)
+        self._ansible_hook = AnsibleHook(ssh_conn_id=conn_id)
         self.extravars["ansible_user"] = self._ansible_hook.username
         self.extravars["ansible_port"] = self._ansible_hook.port
         self.extravars["ansible_connection"] = "ssh"
