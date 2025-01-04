@@ -141,7 +141,7 @@ class AnsibleHook(BaseHook):
                 validators=[NumberRange(min=1, max=65535)],
             ),
             "private_key": StringField(
-                name=lazy_gettext("Key File Data"),
+                name=lazy_gettext("Private Key Data"),
                 widget=BS3TextAreaFieldWidget(),
             ),
             "private_key_passphrase": StringField(
