@@ -16,26 +16,23 @@
 # under the License.
 from __future__ import annotations
 
-from typing import Any, Union, Optional, Collection, Mapping, Sequence
+from typing import Any, Union, Collection, Mapping, Sequence
 import json
-import base64
 import os
 import ansible_runner
+import airflow.models.xcom_arg
 from airflow.models.baseoperator import BaseOperator
 from airflow.utils.context import Context
-from airflow.exceptions import AirflowException
-import airflow.models.xcom_arg
 from airflow.lineage import prepare_lineage, apply_lineage
 
-from airflow_ansible_provider.utils.sync_git_repo import sync_repo
-from airflow_ansible_provider.utils.kms import get_secret
+# from airflow_ansible_provider.utils.sync_git_repo import sync_repo
+# from airflow_ansible_provider.utils.kms import get_secret
 from airflow_ansible_provider.hooks.ansible import AnsibleHook
 
 ALL_KEYS = {}
 
-ANSIBLE_SSH_USER_KEY = "12345"
 ANSIBLE_ARTIFACT_DIR = "/tmp/ansible/"
-ANSIBLE_PLYBOOK_PROJECT = "Playbooks"
+ANSIBLE_PLYBOOK_PROJECT_PATH = "/opt/airflow/ansible_playbook/"
 ANSIBLE_EVENT_STATUS = {
     "playbook_on_start": "running",
     "playbook_on_task_start": "running",
@@ -82,15 +79,16 @@ class AnsibleOperator(BaseOperator):
 
     operator_fields: Sequence[str] = (
         "playbook",
-        "kms_keys",
+        # "kms_keys",
         "inventory",
         "roles_path",
         "extravars",
         "tags",
         "skip_tags",
         "artifact_dir",
-        "conn_id",
-        "git_extra",
+        # "conn_id",
+        "project_dir",
+        # "git_extra",
         "path",
         "get_ci_events",
         "forks",
@@ -98,12 +96,13 @@ class AnsibleOperator(BaseOperator):
         "ansible_vars",
     )
     template_fields_renderers = {
-        "ssh_key": ANSIBLE_SSH_USER_KEY,
-        "kms_keys": None,
+        "ansible_conn_id": "ansible_conn_id",
+        # "kms_keys": None,
         "path": "",
-        "artifact_dir": ANSIBLE_ARTIFACT_DIR,
         "inventory": None,
-        "conn_id": ANSIBLE_PLYBOOK_PROJECT,
+        # "conn_id": ANSIBLE_PLYBOOK_PROJECT,
+        "artifact_dir": ANSIBLE_ARTIFACT_DIR,
+        "project_dir": ANSIBLE_PLYBOOK_PROJECT_PATH,
         "roles_path": None,
         "extravars": None,
         "tags": None,
@@ -111,7 +110,7 @@ class AnsibleOperator(BaseOperator):
         "get_ci_events": False,
         "forks": 10,
         "timeout": None,
-        "git_extra": None,
+        # "git_extra": None,
     }
     ui_color = "#FFEFEB"
     ui_fgcolor = "#FF0000"
@@ -121,11 +120,12 @@ class AnsibleOperator(BaseOperator):
         *,
         playbook: str = "",
         ansible_conn_id: str = "ansible_conn_id",
-        kms_keys: Union[list, None] = None,
+        # kms_keys: Union[list, None] = None,
         path: str = "",
-        artifact_dir: str = ANSIBLE_ARTIFACT_DIR,
         inventory: Union[dict, str, list, None] = None,
-        conn_id: str = ANSIBLE_PLYBOOK_PROJECT,
+        # conn_id: str = ANSIBLE_PLYBOOK_PROJECT,
+        artifact_dir: str = ANSIBLE_ARTIFACT_DIR,
+        project_dir: str = ANSIBLE_PLYBOOK_PROJECT_PATH,
         roles_path: Union[dict, list] = None,
         extravars: Union[dict, None] = None,
         tags: Union[list, None] = None,
@@ -133,7 +133,7 @@ class AnsibleOperator(BaseOperator):
         get_ci_events: bool = False,
         forks: int = 10,
         timeout: Union[int, None] = None,
-        git_extra: Union[dict, None] = None,
+        # git_extra: Union[dict, None] = None,
         ansible_vars: dict = None,
         op_args: Collection[Any] | None = None,
         op_kwargs: Mapping[str, Any] | None = None,
@@ -143,11 +143,12 @@ class AnsibleOperator(BaseOperator):
             **kwargs,
         )
         self.playbook = playbook
-        self.kms_keys = kms_keys
+        # self.kms_keys = kms_keys
         self.path = path
-        self.artifact_dir = artifact_dir
         self.inventory = inventory
-        self.conn_id = conn_id
+        # self.conn_id = conn_id
+        self.artifact_dir = artifact_dir
+        self.project_dir = project_dir
         self.roles_path = roles_path
         self.extravars = extravars or {}
         self.tags = tags
@@ -155,7 +156,7 @@ class AnsibleOperator(BaseOperator):
         self.get_ci_events = get_ci_events
         self.forks = forks
         self.timeout = timeout
-        self.git_extra = git_extra
+        # self.git_extra = git_extra
         self.ansible_vars = ansible_vars
         self.op_args = op_args or ()
         self.op_kwargs = op_kwargs or {}
@@ -179,21 +180,21 @@ class AnsibleOperator(BaseOperator):
         last_event = data
         self.log.info("event: %s", last_event)
 
-    def get_key(self, kms_key: None) -> Optional[dict]:
-        """get ssh key"""
-        global ALL_KEYS  # pylint: disable=global-variable-not-assigned
-        if kms_key in ALL_KEYS:
-            return ALL_KEYS[kms_key]
-        if kms_key is None:
-            return None
-        _, pwdValue = get_secret(token=kms_key)
-        if pwdValue is None:
-            return None
-        try:
-            ALL_KEYS[kms_key] = base64.b64decode(pwdValue).decode("utf-8")
-            return ALL_KEYS[kms_key]
-        except Exception:  # pylint: disable=broad-except
-            return None
+    # def get_key(self, kms_key: None) -> Optional[dict]:
+    #     """get ssh key"""
+    #     global ALL_KEYS  # pylint: disable=global-variable-not-assigned
+    #     if kms_key in ALL_KEYS:
+    #         return ALL_KEYS[kms_key]
+    #     if kms_key is None:
+    #         return None
+    #     _, pwdValue = get_secret(token=kms_key)
+    #     if pwdValue is None:
+    #         return None
+    #     try:
+    #         ALL_KEYS[kms_key] = base64.b64decode(pwdValue).decode("utf-8")
+    #         return ALL_KEYS[kms_key]
+    #     except Exception:  # pylint: disable=broad-except
+    #         return None
 
     @prepare_lineage
     def pre_execute(self, context: Context):
@@ -208,28 +209,28 @@ class AnsibleOperator(BaseOperator):
             if isinstance(value, airflow.models.xcom_arg.PlainXComArg):
                 setattr(self, attr, value.resolve(context))
 
-        for t in self.kms_keys or []:
-            pwdKey, pwdValue = get_secret(token=t)
-            if pwdKey and pwdKey not in self.extravars:
-                self.extravars[pwdKey] = pwdValue
+        # for t in self.kms_keys or []:
+        #     pwdKey, pwdValue = get_secret(token=t)
+        #     if pwdKey and pwdKey not in self.extravars:
+        #         self.extravars[pwdKey] = pwdValue
         for k, v in ANSIBLE_DEFAULT_VARS.items():
             if k not in self.extravars:
                 self.extravars[k] = v
-        self.log.debug("conn_id: %s", self.conn_id)
-        self.log.debug("git_extra: %s", self.git_extra)
-        self.project_dir = sync_repo(conn_id=self.conn_id, extra=self.git_extra)
+        # self.log.debug("conn_id: %s", self.conn_id)
+        # self.log.debug("git_extra: %s", self.git_extra)
+        # self.project_dir = sync_repo(conn_id=self.conn_id, extra=self.git_extra)
         self.log.info(
             "project_dir: %s, project path: %s, playbook: %s",
             self.project_dir,
             self.path,
             self.playbook,
         )
-        if self.project_dir == "":
-            self.log.critical("project_dir is empty")
-            raise AirflowException("project_dir is empty")
-        if not os.path.exists(self.project_dir):
-            self.log.critical("project_dir is not exist")
-            raise AirflowException("project_dir is not exist")
+        # if self.project_dir == "":
+        #     self.log.critical("project_dir is empty")
+        #     raise AirflowException("project_dir is empty")
+        # if not os.path.exists(self.project_dir):
+        #     self.log.critical("project_dir is not exist")
+        #     raise AirflowException("project_dir is not exist")
         if not os.path.exists(self.artifact_dir):
             os.makedirs(self.artifact_dir)
 
@@ -239,13 +240,13 @@ class AnsibleOperator(BaseOperator):
 
     def execute(self, context: Context):
         self.log.info(
-            "playbook: %s, roles_path: %s, project_dir: %s, inventory: %s, conn_id: %s, extravars: %s, tags: %s, "
+            "playbook: %s, roles_path: %s, project_dir: %s, inventory: %s, project_dir: %s, extravars: %s, tags: %s, "
             "skip_tags: %s",
             self.playbook,
             self.roles_path,
             self.project_dir,
             self.inventory,
-            self.conn_id,
+            self.project_dir,
             self.extravars,
             self.tags,
             self.skip_tags,
