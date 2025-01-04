@@ -27,11 +27,7 @@ from airflow.lineage import prepare_lineage, apply_lineage
 
 # from airflow_ansible_provider.utils.sync_git_repo import sync_repo
 # from airflow_ansible_provider.utils.kms import get_secret
-from airflow_ansible_provider.hooks.ansible import (
-    AnsibleHook,
-    ANSIBLE_ARTIFACT_DIR,
-    ANSIBLE_PLYBOOK_DIR,
-)
+from airflow_ansible_provider.hooks.ansible import AnsibleHook
 
 ALL_KEYS = {}
 
@@ -168,15 +164,9 @@ class AnsibleOperator(BaseOperator):
         self.extravars["ansible_user"] = self._ansible_hook.username
         self.extravars["ansible_port"] = self._ansible_hook.port
         self.extravars["ansible_connection"] = "ssh"
-        self.project_dir = (
-            project_dir
-            or self._ansible_hook.ansible_playbook_directory
-            or ANSIBLE_PLYBOOK_DIR
-        )
+        self.project_dir = project_dir or self._ansible_hook.ansible_playbook_directory
         self.artifact_dir = (
-            artifact_dir
-            or self._ansible_hook.ansible_artifact_directory
-            or ANSIBLE_ARTIFACT_DIR
+            artifact_dir or self._ansible_hook.ansible_artifact_directory
         )
 
         # todo: add the timeouts
