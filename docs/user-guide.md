@@ -6,7 +6,7 @@ pip install airflow-ansible-provider
 # Connection Setting
 Add `ansible` Airflow Connections in your airflow system 
 
-![config connection](imags/config_connection.png)
+![config connection](images/config_connection.png)
 
 # DAG Example
 ```python
@@ -33,8 +33,8 @@ def ping(inventory):  # pylint: disable=unused-argument
 ```
 
 # DAGRUN
-![DAGRUN](imags/run_dag_ping.png)
-![DAGRUN](imags/ping_dagrun.png)
+![DAGRUN](images/run_dag_ping.png)
+![DAGRUN](images/ping_dagrun.png)
 
 # XCOM
 ## runner_id 
@@ -117,4 +117,4 @@ def ping(inventory):  # pylint: disable=unused-argument
 ```
 
 # Ansible Artifacts
-![Ansible Artifacts](imags/ansible_artifacts.png)
+![Ansible Artifacts](images/ansible_artifacts.png)
