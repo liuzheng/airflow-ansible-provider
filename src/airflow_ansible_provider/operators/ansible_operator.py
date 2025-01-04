@@ -27,12 +27,14 @@ from airflow.lineage import prepare_lineage, apply_lineage
 
 # from airflow_ansible_provider.utils.sync_git_repo import sync_repo
 # from airflow_ansible_provider.utils.kms import get_secret
-from airflow_ansible_provider.hooks.ansible import AnsibleHook
+from airflow_ansible_provider.hooks.ansible import (
+    AnsibleHook,
+    ANSIBLE_ARTIFACT_DIR,
+    ANSIBLE_PLYBOOK_DIR,
+)
 
 ALL_KEYS = {}
 
-ANSIBLE_ARTIFACT_DIR = "/tmp/ansible/"
-ANSIBLE_PLYBOOK_PROJECT_PATH = "/opt/airflow/ansible_playbook/"
 ANSIBLE_EVENT_STATUS = {
     "playbook_on_start": "running",
     "playbook_on_task_start": "running",
@@ -101,8 +103,6 @@ class AnsibleOperator(BaseOperator):
         "path": "",
         "inventory": None,
         # "conn_id": ANSIBLE_PLYBOOK_PROJECT,
-        "artifact_dir": ANSIBLE_ARTIFACT_DIR,
-        "project_dir": ANSIBLE_PLYBOOK_PROJECT_PATH,
         "roles_path": None,
         "extravars": None,
         "tags": None,
@@ -124,8 +124,8 @@ class AnsibleOperator(BaseOperator):
         path: str = "",
         inventory: Union[dict, str, list, None] = None,
         # conn_id: str = ANSIBLE_PLYBOOK_PROJECT,
-        artifact_dir: str = ANSIBLE_ARTIFACT_DIR,
-        project_dir: str = ANSIBLE_PLYBOOK_PROJECT_PATH,
+        artifact_dir: str | None = None,
+        project_dir: str | None = None,
         roles_path: Union[dict, list] = None,
         extravars: Union[dict, None] = None,
         tags: Union[list, None] = None,
@@ -147,8 +147,6 @@ class AnsibleOperator(BaseOperator):
         self.path = path
         self.inventory = inventory
         # self.conn_id = conn_id
-        self.artifact_dir = artifact_dir
-        self.project_dir = project_dir
         self.roles_path = roles_path
         self.extravars = extravars or {}
         self.tags = tags
@@ -163,7 +161,6 @@ class AnsibleOperator(BaseOperator):
 
         self.ci_events = {}
         self.last_event = {}
-        self.project_dir = ""
         self.log.debug("playbook: %s", self.playbook)
         self.log.debug("playbook type: %s", type(self.playbook))
 
@@ -171,6 +168,17 @@ class AnsibleOperator(BaseOperator):
         self.extravars["ansible_user"] = self._ansible_hook.username
         self.extravars["ansible_port"] = self._ansible_hook.port
         self.extravars["ansible_connection"] = "ssh"
+        self.project_dir = (
+            project_dir
+            or self._ansible_hook.ansible_playbook_directory
+            or ANSIBLE_PLYBOOK_DIR
+        )
+        self.artifact_dir = (
+            artifact_dir
+            or self._ansible_hook.ansible_artifact_directory
+            or ANSIBLE_ARTIFACT_DIR
+        )
+
         # todo: add the timeouts
 
     def event_handler(self, data):

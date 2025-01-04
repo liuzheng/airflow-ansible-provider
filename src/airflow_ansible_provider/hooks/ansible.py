@@ -46,6 +46,9 @@ KEEPALIVE_INTERVAL = 30
 BANNER_TIMEOUT = 30.0
 AUTH_TIMEOUT = 120
 
+ANSIBLE_ARTIFACT_DIR = "/tmp/ansible/"
+ANSIBLE_PLYBOOK_DIR = "/opt/airflow/ansible_playbook/"
+
 
 class AnsibleHook(BaseHook):
     """
@@ -123,6 +126,14 @@ class AnsibleHook(BaseHook):
         from wtforms.validators import NumberRange
 
         return {
+            "ansible_playbook_directory": StringField(
+                name=lazy_gettext("Ansible Playbook Directory"),
+                widget=BS3TextFieldWidget(),
+            ),
+            "ansible_artifact_directory": StringField(
+                name=lazy_gettext("Ansible Artifact Directory"),
+                widget=BS3TextFieldWidget(),
+            ),
             "port": IntegerField(
                 name=lazy_gettext("Port"),
                 default=SSH_PORT,
@@ -193,6 +204,8 @@ class AnsibleHook(BaseHook):
         ciphers: list[str] | None = None,
         auth_timeout: int = AUTH_TIMEOUT,
         host_proxy_cmd: str | None = None,
+        ansible_playbook_directory: str | None = None,
+        ansible_artifact_directory: str | None = None,
     ) -> None:
         super().__init__()
         self.ssh_conn_id = ssh_conn_id
@@ -211,6 +224,12 @@ class AnsibleHook(BaseHook):
         self.ciphers = ciphers
         self.host_proxy_cmd = host_proxy_cmd
         self.auth_timeout = auth_timeout
+        self.ansible_playbook_directory = (
+            ansible_playbook_directory or ANSIBLE_PLYBOOK_DIR
+        )
+        self.ansible_artifact_directory = (
+            ansible_artifact_directory or ANSIBLE_ARTIFACT_DIR
+        )
 
         # Default values, overridable from Connection
         self.compress = True
@@ -244,6 +263,8 @@ class AnsibleHook(BaseHook):
                     "banner_timeout",
                     "auth_timeout",
                     "host_proxy_cmd",
+                    "ansible_playbook_directory",
+                    "ansible_artifact_directory",
                 ):
                     if getattr(self, field) is not None:
                         setattr(self, field, extra_options.get(field))
