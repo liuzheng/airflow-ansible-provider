@@ -2,7 +2,7 @@
 An Airflow Ansible provider
 
 ## Getting started
-Please note that this file is no substitute for reading and understanding the Airflow documentation. This file is only intended to provide a quick start for the SAS providers. Unless an issue relates specifically to the SAS providers, the Airflow documentation should be consulted.
+Please note that this file is no substitute for reading and understanding the Airflow documentation. This file is only intended to provide a quick start for the Ansible providers. Unless an issue relates specifically to the Ansible providers, the Airflow documentation should be consulted.
 
 ### Install Airflow
 Follow instructions at https://airflow.apache.org/docs/apache-airflow/stable/installation/index.html to install Airflow.
