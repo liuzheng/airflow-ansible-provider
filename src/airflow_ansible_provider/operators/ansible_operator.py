@@ -94,7 +94,7 @@ class AnsibleOperator(BaseOperator):
         "ansible_vars",
     )
     template_fields_renderers = {
-        "conn_id": "ansible_conn_id",
+        "conn_id": "ansible_default",
         # "kms_keys": None,
         "path": "",
         "inventory": None,
@@ -115,7 +115,7 @@ class AnsibleOperator(BaseOperator):
         self,
         *,
         playbook: str = "",
-        conn_id: str = "ansible_conn_id",
+        conn_id: str = "ansible_default",
         # kms_keys: Union[list, None] = None,
         path: str = "",
         inventory: Union[dict, str, list, None] = None,

@@ -189,7 +189,7 @@ class AnsibleHook(BaseHook):
 
     def __init__(
         self,
-        conn_id: str | None = None,
+        conn_id: str = "ansible_default",
         remote_host: str = "",
         username: str | None = None,
         password: str | None = None,
