@@ -45,7 +45,12 @@ class AnsibleDecoratedOperator(DecoratedOperator, AnsibleOperator):
         for k in AnsibleOperator.operator_fields:
             # When k is not in kwargs, pass op_kwargs to AnsibleOperator
             if (
-                k not in ("ssh_key", "pool", "queue")  # Unsupported parameters in the decorator
+                k
+                not in (
+                    "conn_id",
+                    "pool",
+                    "queue",
+                )  # Unsupported parameters in the decorator
                 and k not in kwargs
                 and k in op_kwargs
             ):
