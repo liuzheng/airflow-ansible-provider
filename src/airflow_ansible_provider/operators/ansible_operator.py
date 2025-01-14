@@ -88,7 +88,7 @@ class AnsibleOperator(BaseOperator):
         "path",
         "get_ci_events",
         "forks",
-        "timeout",
+        "ansible_timeout",
         "ansible_vars",
     )
     template_fields_renderers = {
@@ -104,7 +104,7 @@ class AnsibleOperator(BaseOperator):
         "skip_tags": None,
         "get_ci_events": False,
         "forks": 10,
-        "timeout": None,
+        "ansible_timeout": None,
         # "git_extra": None,
     }
     ui_color = "#FFEFEB"
@@ -127,7 +127,7 @@ class AnsibleOperator(BaseOperator):
         skip_tags: Union[list, None] = None,
         get_ci_events: bool = False,
         forks: int = 10,
-        timeout: Union[int, None] = None,
+        ansible_timeout: Union[int, None] = None,
         # git_extra: Union[dict, None] = None,
         ansible_vars: dict = None,
         op_args: Collection[Any] | None = None,
@@ -148,7 +148,7 @@ class AnsibleOperator(BaseOperator):
         self.skip_tags = skip_tags
         self.get_ci_events = get_ci_events
         self.forks = forks
-        self.timeout = timeout
+        self.timeout = ansible_timeout
         # self.git_extra = git_extra
         self.ansible_vars = ansible_vars
         self.op_args = op_args or ()
