@@ -148,7 +148,7 @@ class AnsibleOperator(BaseOperator):
         self.skip_tags = skip_tags
         self.get_ci_events = get_ci_events
         self.forks = forks
-        self.timeout = ansible_timeout
+        self.ansible_timeout = ansible_timeout
         # self.git_extra = git_extra
         self.ansible_vars = ansible_vars
         self.op_args = op_args or ()
@@ -260,7 +260,7 @@ class AnsibleOperator(BaseOperator):
             playbook=self.playbook,
             extravars=self.extravars,
             forks=self.forks,
-            timeout=self.timeout,
+            timeout=self.ansible_timeout,
             inventory=self.inventory,
             event_handler=self.event_handler,
             # status_handler=my_status_handler, # Disable printing to prevent sensitive information leakage, also unnecessary
