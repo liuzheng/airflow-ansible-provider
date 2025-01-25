@@ -59,6 +59,7 @@ class AnsibleOperator(BaseOperator):
 
     :param int forks: Control Ansible parallel concurrency
     :param str artifact_dir: The path to the directory where artifacts should live, this defaults to 'artifacts' under the private data dir
+    :param str project_dir: The path to the directory where the project is located, default will use the setting in conn_id
     :param int timeout: The timeout value in seconds that will be passed to either ``pexpect`` of ``subprocess`` invocation
                     (based on ``runner_mode`` selected) while executing command. It the timeout is triggered it will force cancel the
                     execution.
