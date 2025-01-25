@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 VERSIONs = [VERSION]
 
 
 def get_provider_info():
+    """
+    Get provider info
+    """
     return {
         "package-name": "airflow-ansible-provider",
         "name": "Airflow Ansible Provider",
