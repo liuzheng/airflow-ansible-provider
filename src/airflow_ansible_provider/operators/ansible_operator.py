@@ -16,14 +16,16 @@
 # under the License.
 from __future__ import annotations
 
-from typing import Any, Union, Collection, Mapping, Sequence
 import json
 import os
-import ansible_runner
+from typing import Any, Collection, Mapping, Sequence, Union
+
 import airflow.models.xcom_arg
+import ansible_runner
+from airflow.lineage import apply_lineage, prepare_lineage
 from airflow.models.baseoperator import BaseOperator
+from airflow.operators.python import execute_in_subprocess
 from airflow.utils.context import Context
-from airflow.lineage import prepare_lineage, apply_lineage
 
 # from airflow_ansible_provider.utils.sync_git_repo import sync_repo
 # from airflow_ansible_provider.utils.kms import get_secret
@@ -107,6 +109,7 @@ class AnsibleOperator(BaseOperator):
         "forks": 10,
         "ansible_timeout": None,
         # "git_extra": None,
+        "galaxy_collections": None,
     }
     ui_color = "#FFEFEB"
     ui_fgcolor = "#FF0000"
@@ -133,11 +136,10 @@ class AnsibleOperator(BaseOperator):
         ansible_vars: dict = None,
         op_args: Collection[Any] | None = None,
         op_kwargs: Mapping[str, Any] | None = None,
+        galaxy_collections: list[str] | None = None,
         **kwargs,
     ) -> None:
-        super().__init__(
-            **kwargs,
-        )
+        super().__init__(**kwargs)
         self.playbook = playbook
         # self.kms_keys = kms_keys
         self.path = path
@@ -154,6 +156,7 @@ class AnsibleOperator(BaseOperator):
         self.ansible_vars = ansible_vars
         self.op_args = op_args or ()
         self.op_kwargs = op_kwargs or {}
+        self.galaxy_collections = galaxy_collections
 
         self.ci_events = {}
         self.last_event = {}
@@ -235,6 +238,15 @@ class AnsibleOperator(BaseOperator):
         # tip: this will default inventory was a str for path, cannot pass it as ini
         if isinstance(self.inventory, str):
             self.inventory = os.path.join(self.project_dir, self.path, self.inventory)
+        for galaxy_pkg in self.galaxy_collections or []:
+            execute_in_subprocess(
+                cmd=[
+                    "ansible-galaxy",
+                    "collection",
+                    "install",
+                    f"{galaxy_pkg}",
+                ]
+            )
 
     def execute(self, context: Context):
         self.log.info(

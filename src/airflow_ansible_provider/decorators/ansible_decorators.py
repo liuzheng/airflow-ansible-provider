@@ -60,6 +60,7 @@ class AnsibleDecoratedOperator(DecoratedOperator, AnsibleOperator):
         self.log.debug("AnsibleDecoratedOperator kwargs: %s", kwargs)
         super().__init__(
             kwargs_to_upstream={
+                "python_callable": python_callable,
                 "op_args": op_args,
                 "op_kwargs": op_kwargs,
             },

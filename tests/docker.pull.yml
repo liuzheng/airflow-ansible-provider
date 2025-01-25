@@ -1,0 +1,8 @@
+---
+- hosts: default
+  gather_facts: False
+  tasks:
+    - name: Pull an image
+      community.docker.docker_image:
+        name: debian
+        source: pull
