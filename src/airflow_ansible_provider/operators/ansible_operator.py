@@ -32,6 +32,9 @@ from airflow.utils.context import Context
 from airflow_ansible_provider.hooks.ansible import AnsibleHook
 
 ALL_KEYS = {}
+ANSIBLE_PRIVATE_DATA_DIR = "/tmp/ansible_runner" or os.environ.get(
+    "ANSIBLE_PRIVATE_DATA_DIR"
+)
 
 ANSIBLE_EVENT_STATUS = {
     "playbook_on_start": "running",
@@ -178,8 +181,8 @@ class AnsibleOperator(BaseOperator):
         """event handler"""
         if self.get_ci_events and data.get("event_data", {}).get("host"):
             self.ci_events[data["event_data"]["host"]] = data
-        last_event = data
-        self.log.info("event: %s", last_event)
+        self.last_event = data
+        self.log.info("event: %s", self.last_event)
 
     # def get_key(self, kms_key: None) -> Optional[dict]:
     #     """get ssh key"""
@@ -238,17 +241,27 @@ class AnsibleOperator(BaseOperator):
         # tip: this will default inventory was a str for path, cannot pass it as ini
         if isinstance(self.inventory, str):
             self.inventory = os.path.join(self.project_dir, self.path, self.inventory)
+        self._install_galaxy_packages()
+
+    def _install_galaxy_packages(
+        self, galaxy_bin: str = "ansible-galaxy", HOME: str = None
+    ):
+        if HOME:
+            cmd_prefix = f"HOME={HOME}"
+        else:
+            cmd_prefix = ""
         for galaxy_pkg in self.galaxy_collections or []:
             execute_in_subprocess(
                 cmd=[
-                    "ansible-galaxy",
+                    cmd_prefix,
+                    galaxy_bin,
                     "collection",
                     "install",
                     f"{galaxy_pkg}",
                 ]
             )
 
-    def execute(self, context: Context):
+    def ansibel_runner(self):
         self.log.info(
             "playbook: %s, roles_path: %s, project_dir: %s, inventory: %s, project_dir: %s, extravars: %s, tags: %s, "
             "skip_tags: %s",
@@ -261,7 +274,8 @@ class AnsibleOperator(BaseOperator):
             self.tags,
             self.skip_tags,
         )
-        r = ansible_runner.run(
+        r = ansible_runner.runner_config.RunnerConfig(
+            private_data_dir=ANSIBLE_PRIVATE_DATA_DIR,
             ssh_key=self._ansible_hook.pkey,
             passwords=[self._ansible_hook.password],
             quiet=True,
@@ -281,6 +295,14 @@ class AnsibleOperator(BaseOperator):
             # cancel_callback=my_cancel_callback,
             # finished_callback=finish_callback,  # No need to print
         )
+        r.prepare()
+        return r
+
+    def ansible_run(self):
+        return ansible_runner.run(runner_config=self.ansibel_runner())
+
+    def execute(self, context: Context):
+        r = self.ansible_run()
         self.log.info(
             "status: %s, artifact_dir: %s, command: %s, inventory: %s, playbook: %s, private_data_dir: %s, "
             "project_dir: %s, ci_events: %s",
