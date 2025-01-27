@@ -174,6 +174,9 @@ class AnsibleOperator(BaseOperator):
         self.artifact_dir = (
             artifact_dir or self._ansible_hook.ansible_artifact_directory
         )
+        self._tmp_dir = None
+        self._env_dir = None
+        self._bin_path = None
 
         # todo: add the timeouts
 
@@ -274,7 +277,11 @@ class AnsibleOperator(BaseOperator):
             self.tags,
             self.skip_tags,
         )
+        binary = None
+        if self._bin_path is not None:
+            binary = self._bin_path / "ansible-playbook"
         r = ansible_runner.runner_config.RunnerConfig(
+            binary=binary,
             private_data_dir=ANSIBLE_PRIVATE_DATA_DIR,
             ssh_key=self._ansible_hook.pkey,
             passwords=[self._ansible_hook.password],
@@ -298,11 +305,8 @@ class AnsibleOperator(BaseOperator):
         r.prepare()
         return r
 
-    def ansible_run(self):
-        return ansible_runner.run(runner_config=self.ansibel_runner())
-
     def execute(self, context: Context):
-        r = self.ansible_run()
+        r = ansible_runner.run(runner_config=self.ansibel_runner())
         self.log.info(
             "status: %s, artifact_dir: %s, command: %s, inventory: %s, playbook: %s, private_data_dir: %s, "
             "project_dir: %s, ci_events: %s",

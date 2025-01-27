@@ -36,9 +36,6 @@ class VirtualAnsibleOperator(AnsibleOperator, PythonVirtualenvOperator):
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
-        self._tmp_dir = None
-        self._env_dir = None
-        self._bin_path = None
 
     def _install_galaxy_packages(self):  # type: ignore
         pass
@@ -86,16 +83,6 @@ class VirtualAnsibleOperator(AnsibleOperator, PythonVirtualenvOperator):
             galaxy_bin=self._bin_path / "ansible-galaxy",
             HOME=self._env_dir,
         )
-
-    def ansible_run(self):
-        # todo:
-        r = self.ansibel_runner()
-        execute_in_subprocess(
-            cmd=[
-                self._bin_path / r.command,
-            ]
-        )
-        return r
 
     def on_kill(self):
         if self._tmp_dir:
