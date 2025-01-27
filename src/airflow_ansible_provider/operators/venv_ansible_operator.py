@@ -21,7 +21,7 @@ from typing import Tuple
 
 from airflow.lineage import prepare_lineage
 from airflow.models.variable import Variable
-from airflow.operators.python import execute_in_subprocess, PythonVirtualenvOperator
+from airflow.operators.python import PythonVirtualenvOperator
 from airflow.utils import hashlib_wrapper
 from airflow.utils.context import Context
 
@@ -29,13 +29,6 @@ from airflow_ansible_provider.operators.ansible_operator import AnsibleOperator
 
 
 class VirtualAnsibleOperator(AnsibleOperator, PythonVirtualenvOperator):
-
-    def __init__(
-        self,
-        *args,
-        **kwargs,
-    ) -> None:
-        super().__init__(**kwargs)
 
     def _install_galaxy_packages(self):  # type: ignore
         pass

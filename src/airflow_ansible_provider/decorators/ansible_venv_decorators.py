@@ -44,8 +44,8 @@ class AnsibleVenvDecoratedOperator(DecoratedOperator, VirtualAnsibleOperator):
         for k in ("ansible_vars",):  # Unsupported parameters in the decorator
             if k in kwargs:
                 kwargs.pop(k)
-        for k in AnsibleOperator.operator_fields:
-            # When k is not in kwargs, pass op_kwargs to AnsibleOperator
+        for k in VirtualAnsibleOperator.operator_fields:
+            # When k is not in kwargs, pass op_kwargs to VirtualAnsibleOperator
             if (
                 k
                 not in (

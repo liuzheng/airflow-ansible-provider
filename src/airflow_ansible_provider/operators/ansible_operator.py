@@ -120,6 +120,7 @@ class AnsibleOperator(BaseOperator):
     def __init__(
         self,
         *,
+        python_callable: Callable,
         playbook: str = "",
         conn_id: str = "ansible_default",
         # kms_keys: Union[list, None] = None,
@@ -138,9 +139,16 @@ class AnsibleOperator(BaseOperator):
         # git_extra: Union[dict, None] = None,
         ansible_vars: dict = None,
         galaxy_collections: list[str] | None = None,
+        op_args: Collection[Any] | None = None,
+        op_kwargs: Mapping[str, Any] | None = None,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(
+            python_callable=python_callable,
+            op_args=op_args,
+            op_kwargs=op_kwargs,
+            **kwargs,
+        )
         self.playbook = playbook
         # self.kms_keys = kms_keys
         self.path = path
@@ -155,8 +163,8 @@ class AnsibleOperator(BaseOperator):
         self.ansible_timeout = ansible_timeout
         # self.git_extra = git_extra
         self.ansible_vars = ansible_vars
-        self.op_args = kwargs.get("op_args", ())
-        self.op_kwargs = kwargs.get("op_kwargs", {})
+        self.op_args = op_args or ()
+        self.op_kwargs = op_kwargs or {}
         self.galaxy_collections = galaxy_collections
 
         self.ci_events = {}
