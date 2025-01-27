@@ -24,12 +24,13 @@ import airflow.models.xcom_arg
 import ansible_runner
 from airflow.lineage import apply_lineage, prepare_lineage
 from airflow.models.baseoperator import BaseOperator
-from airflow.operators.python import execute_in_subprocess
+from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
 from airflow.utils.context import Context
 
 # from airflow_ansible_provider.utils.sync_git_repo import sync_repo
 # from airflow_ansible_provider.utils.kms import get_secret
 from airflow_ansible_provider.hooks.ansible import AnsibleHook
+
 
 ALL_KEYS = {}
 ANSIBLE_PRIVATE_DATA_DIR = "/tmp/ansible_runner" or os.environ.get(
@@ -120,7 +121,6 @@ class AnsibleOperator(BaseOperator):
     def __init__(
         self,
         *,
-        python_callable: Callable,
         playbook: str = "",
         conn_id: str = "ansible_default",
         # kms_keys: Union[list, None] = None,
@@ -143,12 +143,7 @@ class AnsibleOperator(BaseOperator):
         op_kwargs: Mapping[str, Any] | None = None,
         **kwargs,
     ) -> None:
-        super().__init__(
-            python_callable=python_callable,
-            op_args=op_args,
-            op_kwargs=op_kwargs,
-            **kwargs,
-        )
+        super().__init__(**kwargs)
         self.playbook = playbook
         # self.kms_keys = kms_keys
         self.path = path
@@ -255,19 +250,15 @@ class AnsibleOperator(BaseOperator):
     def _install_galaxy_packages(
         self, galaxy_bin: str = "ansible-galaxy", HOME: str = None
     ):
-        if HOME:
-            cmd_prefix = f"HOME={HOME}"
-        else:
-            cmd_prefix = ""
         for galaxy_pkg in self.galaxy_collections or []:
-            execute_in_subprocess(
+            execute_in_subprocess_with_kwargs(
                 cmd=[
-                    cmd_prefix,
                     galaxy_bin,
                     "collection",
                     "install",
                     f"{galaxy_pkg}",
-                ]
+                ],
+                env={"HOME": HOME} if HOME else None,
             )
 
     def ansibel_runner(self):

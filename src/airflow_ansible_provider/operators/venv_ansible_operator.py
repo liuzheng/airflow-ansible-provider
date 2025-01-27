@@ -14,11 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import os
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Tuple
-
 from airflow.lineage import prepare_lineage
 from airflow.models.variable import Variable
 from airflow.operators.python import PythonVirtualenvOperator
@@ -28,7 +28,9 @@ from airflow.utils.context import Context
 from airflow_ansible_provider.operators.ansible_operator import AnsibleOperator
 
 
-class VirtualAnsibleOperator(AnsibleOperator, PythonVirtualenvOperator):
+class VirtualAnsibleOperator(PythonVirtualenvOperator, AnsibleOperator):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def _install_galaxy_packages(self):  # type: ignore
         pass
@@ -73,7 +75,7 @@ class VirtualAnsibleOperator(AnsibleOperator, PythonVirtualenvOperator):
         # result = self._execute_python_callable_in_subprocess(python_path)
         # return result
         super()._install_galaxy_packages(
-            galaxy_bin=self._bin_path / "ansible-galaxy",
+            galaxy_bin=f"{self._bin_path}/ansible-galaxy",
             HOME=self._env_dir,
         )
 

@@ -30,7 +30,7 @@ def gen_inventory():
     task_id="docker_pull",
     playbook="docker.pull.yml",
     get_ci_events=True,
-    pip_requirements=["ansible", "ansible-runner"],
+    requirements=["ansible", "ansible-runner"],
     galaxy_collections=["community.docker"],
 )
 def docker_pull(inventory):  # pylint: disable=unused-argument

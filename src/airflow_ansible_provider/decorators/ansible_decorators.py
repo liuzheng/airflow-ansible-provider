@@ -26,13 +26,7 @@ class AnsibleDecoratedOperator(DecoratedOperator, AnsibleOperator):
 
     custom_operator_name: str = "@task.ansible"
 
-    def __init__(
-        self,
-        python_callable: Callable,
-        op_args: Collection[Any] | None = None,
-        op_kwargs: Mapping[str, Any] | None = None,
-        **kwargs,
-    ) -> None:
+    def __init__(self, op_kwargs: Mapping[str, Any], **kwargs) -> None:
         if kwargs.pop("multiple_outputs", None):
             warnings.warn(
                 f"`multiple_outputs=True` is not supported in {self.custom_operator_name} tasks. Ignoring.",
@@ -55,20 +49,7 @@ class AnsibleDecoratedOperator(DecoratedOperator, AnsibleOperator):
                 and k in op_kwargs
             ):
                 kwargs[k] = op_kwargs.get(k)
-        self.log.debug("AnsibleDecoratedOperator op_args: %s", op_args)
-        self.log.debug("AnsibleDecoratedOperator op_kwargs: %s", op_kwargs)
-        self.log.debug("AnsibleDecoratedOperator kwargs: %s", kwargs)
-        super().__init__(
-            kwargs_to_upstream={
-                # "python_callable": python_callable,
-                # "op_args": op_args,
-                # "op_kwargs": op_kwargs,
-            },
-            python_callable=python_callable,
-            op_args=op_args,
-            op_kwargs=op_kwargs,
-            **kwargs,
-        )
+        super().__init__(op_kwargs=op_kwargs, **kwargs)
         self.log.debug("AnsibleDecoratedOperator kwargs: %s", kwargs)
 
     def execute(self, context: Context) -> Any:

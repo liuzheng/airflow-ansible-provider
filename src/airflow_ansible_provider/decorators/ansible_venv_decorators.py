@@ -31,8 +31,7 @@ class AnsibleVenvDecoratedOperator(DecoratedOperator, VirtualAnsibleOperator):
     def __init__(
         self,
         python_callable: Callable,
-        op_args: Collection[Any] | None = None,
-        op_kwargs: Mapping[str, Any] | None = None,
+        op_kwargs: Mapping[str, Any],
         **kwargs,
     ) -> None:
         if kwargs.pop("multiple_outputs", None):
@@ -57,17 +56,11 @@ class AnsibleVenvDecoratedOperator(DecoratedOperator, VirtualAnsibleOperator):
                 and k in op_kwargs
             ):
                 kwargs[k] = op_kwargs.get(k)
-        self.log.debug("AnsibleDecoratedOperator op_args: %s", op_args)
-        self.log.debug("AnsibleDecoratedOperator op_kwargs: %s", op_kwargs)
-        self.log.debug("AnsibleDecoratedOperator kwargs: %s", kwargs)
         super().__init__(
             kwargs_to_upstream={
-                # "python_callable": python_callable,
-                # "op_args": op_args,
-                # "op_kwargs": op_kwargs,
+                "python_callable": python_callable,
             },
             python_callable=python_callable,
-            op_args=op_args,
             op_kwargs=op_kwargs,
             **kwargs,
         )
