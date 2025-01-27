@@ -9,22 +9,24 @@ from airflow.decorators.base import (
     task_decorator_factory,
 )
 
-from airflow_ansible_provider.operators.ansible_operator import AnsibleOperator
+from airflow_ansible_provider.operators.venv_ansible_operator import (
+    VirtualAnsibleOperator,
+)
 
 
-class AnsibleDecoratedOperator(DecoratedOperator, AnsibleOperator):
+class AnsibleVenvDecoratedOperator(DecoratedOperator, VirtualAnsibleOperator):
     """Ansible Decorated Operator"""
 
     template_fields: Sequence[str] = (
         *DecoratedOperator.template_fields,
-        *AnsibleOperator.template_fields,
+        *VirtualAnsibleOperator.template_fields,
     )
     template_fields_renderers: dict[str, str] = {
         **DecoratedOperator.template_fields_renderers,
-        **AnsibleOperator.template_fields_renderers,
+        **VirtualAnsibleOperator.template_fields_renderers,
     }
 
-    custom_operator_name: str = "@task.ansible"
+    custom_operator_name: str = "@task.ansible_venv"
 
     def __init__(
         self,
@@ -81,7 +83,7 @@ class AnsibleDecoratedOperator(DecoratedOperator, AnsibleOperator):
         return self.python_callable(*self.op_args, **kwargs)
 
 
-def ansible_task(
+def ansible_venv_task(
     python_callable: Callable | None = None,
     multiple_outputs: bool | None = None,
     **kwargs,
@@ -90,6 +92,6 @@ def ansible_task(
     return task_decorator_factory(
         python_callable=python_callable,
         multiple_outputs=multiple_outputs,
-        decorated_operator_class=AnsibleDecoratedOperator,
+        decorated_operator_class=AnsibleVenvDecoratedOperator,
         **kwargs,
     )

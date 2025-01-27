@@ -7,7 +7,7 @@ from datetime import datetime
 from airflow.decorators import dag, task
 from airflow.models.param import Param
 from airflow.operators.python import get_current_context
-from airflow_ansible_provider.decorators.ansible_decorators import ansible_task
+from airflow_ansible_provider.decorators import ansible_task
 
 
 @task(task_id="gen_inventory")

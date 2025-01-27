@@ -137,8 +137,6 @@ class AnsibleOperator(BaseOperator):
         ansible_timeout: Union[int, None] = None,
         # git_extra: Union[dict, None] = None,
         ansible_vars: dict = None,
-        op_args: Collection[Any] | None = None,
-        op_kwargs: Mapping[str, Any] | None = None,
         galaxy_collections: list[str] | None = None,
         **kwargs,
     ) -> None:
@@ -157,8 +155,8 @@ class AnsibleOperator(BaseOperator):
         self.ansible_timeout = ansible_timeout
         # self.git_extra = git_extra
         self.ansible_vars = ansible_vars
-        self.op_args = op_args or ()
-        self.op_kwargs = op_kwargs or {}
+        self.op_args = kwargs.get("op_args", ())
+        self.op_kwargs = kwargs.get("op_kwargs", {})
         self.galaxy_collections = galaxy_collections
 
         self.ci_events = {}

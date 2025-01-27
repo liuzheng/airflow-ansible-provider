@@ -15,3 +15,5 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+from .ansible_decorators import ansible_task
+from .ansible_venv_decorators import ansible_venv_task
