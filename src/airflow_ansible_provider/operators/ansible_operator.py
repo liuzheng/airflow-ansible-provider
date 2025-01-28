@@ -22,6 +22,7 @@ from typing import Any, Collection, Mapping, Sequence, Union
 
 import airflow.models.xcom_arg
 from ansible_runner.interface import init_runner
+from ansible_runner.runner_config import ExecutionMode
 from airflow.lineage import apply_lineage, prepare_lineage
 from airflow.models.baseoperator import BaseOperator
 from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
@@ -54,6 +55,7 @@ def ansible_run(**kwargs):
     # fix: because when use binary, the execution_mode will be set RAW, which whill not append the playbook into the command, see also ansible_runner.runner_config.RunnerConfig.generate_ansible_command
     r = init_runner(**kwargs)
     r.config.command.append(kwargs.get("playbook"))
+    r.config.execution_mode = ExecutionMode.ANSIBLE_PLAYBOOK
     r.run()
     return r
 
