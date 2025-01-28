@@ -32,6 +32,7 @@ def gen_inventory():
     get_ci_events=True,
     requirements=["ansible", "ansible-runner"],
     galaxy_collections=["community.docker"],
+    venv_cache_path="/tmp/venv_cache",
 )
 def docker_pull(inventory):  # pylint: disable=unused-argument
     """Collect ansible run results"""

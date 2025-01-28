@@ -14,7 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-import os
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -25,10 +24,10 @@ from airflow.operators.python import PythonVirtualenvOperator
 from airflow.utils import hashlib_wrapper
 from airflow.utils.context import Context
 
-from airflow_ansible_provider.operators.ansible_operator import AnsibleOperator
+from .ansible_operator import AnsibleOperator
 
 
-class VirtualAnsibleOperator(PythonVirtualenvOperator, AnsibleOperator):
+class VirtualAnsibleOperator(AnsibleOperator, PythonVirtualenvOperator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

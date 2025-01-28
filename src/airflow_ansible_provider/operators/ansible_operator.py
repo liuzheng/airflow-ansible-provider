@@ -21,11 +21,12 @@ import os
 from typing import Any, Collection, Mapping, Sequence, Union
 
 import airflow.models.xcom_arg
-import ansible_runner
+from ansible_runner.interface import init_runner
 from airflow.lineage import apply_lineage, prepare_lineage
 from airflow.models.baseoperator import BaseOperator
 from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
 from airflow.utils.context import Context
+from airflow.exceptions import AirflowException
 
 # from airflow_ansible_provider.utils.sync_git_repo import sync_repo
 # from airflow_ansible_provider.utils.kms import get_secret
@@ -47,6 +48,14 @@ ANSIBLE_EVENT_STATUS = {
     "on_any": "unknown",
 }
 ANSIBLE_DEFAULT_VARS = {}
+
+
+def ansible_run(**kwargs):
+    # fix: because when use binary, the execution_mode will be set RAW, which whill not append the playbook into the command, see also ansible_runner.runner_config.RunnerConfig.generate_ansible_command
+    r = init_runner(**kwargs)
+    r.config.command.append(kwargs.get("playbook"))
+    r.run()
+    return r
 
 
 class AnsibleOperator(BaseOperator):
@@ -261,7 +270,7 @@ class AnsibleOperator(BaseOperator):
                 env={"HOME": HOME} if HOME else None,
             )
 
-    def ansibel_runner(self):
+    def execute(self, context: Context):
         self.log.info(
             "playbook: %s, roles_path: %s, project_dir: %s, inventory: %s, project_dir: %s, extravars: %s, tags: %s, "
             "skip_tags: %s",
@@ -274,12 +283,11 @@ class AnsibleOperator(BaseOperator):
             self.tags,
             self.skip_tags,
         )
-        binary = None
+        binary = "ansible-playbook"
         if self._bin_path is not None:
-            binary = self._bin_path / "ansible-playbook"
-        r = ansible_runner.runner_config.RunnerConfig(
+            binary = f"{self._bin_path}/ansible-playbook"
+        r = ansible_run(
             binary=binary,
-            private_data_dir=ANSIBLE_PRIVATE_DATA_DIR,
             ssh_key=self._ansible_hook.pkey,
             passwords=[self._ansible_hook.password],
             quiet=True,
@@ -299,11 +307,6 @@ class AnsibleOperator(BaseOperator):
             # cancel_callback=my_cancel_callback,
             # finished_callback=finish_callback,  # No need to print
         )
-        r.prepare()
-        return r
-
-    def execute(self, context: Context):
-        r = ansible_runner.run(runner_config=self.ansibel_runner())
         self.log.info(
             "status: %s, artifact_dir: %s, command: %s, inventory: %s, playbook: %s, private_data_dir: %s, "
             "project_dir: %s, ci_events: %s",
@@ -346,7 +349,9 @@ class AnsibleOperator(BaseOperator):
             "ci_events": self.ci_events,
         }
         context["ti"].xcom_push(key="runner_id", value=r.config.ident)
-        return context["ansible_return"]
+        if r.status == "successful":
+            return context["ansible_return"]
+        raise AirflowException(f"Ansible run playbook failed: {r.status}")
 
     @apply_lineage
     def post_execute(self, context: Any, result: Any = None):
