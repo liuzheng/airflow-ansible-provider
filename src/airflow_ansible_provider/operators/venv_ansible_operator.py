@@ -14,6 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import os
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -23,6 +24,7 @@ from airflow.models.variable import Variable
 from airflow.operators.python import PythonVirtualenvOperator
 from airflow.utils import hashlib_wrapper
 from airflow.utils.context import Context
+from airflow.exceptions import AirflowException
 
 from .ansible_operator import AnsibleOperator
 
@@ -71,12 +73,30 @@ class VirtualAnsibleOperator(AnsibleOperator, PythonVirtualenvOperator):
             self._env_dir = Path(self._tmp_dir.name)
             self._prepare_venv(self._env_dir)
         self._bin_path = self._env_dir / "bin"
-        # result = self._execute_python_callable_in_subprocess(python_path)
-        # return result
-        super()._install_galaxy_packages(
-            galaxy_bin=f"{self._bin_path}/ansible-galaxy",
-            HOME=self._env_dir,
-        )
+        ansible_playbook_executable = self._bin_path / "ansible-playbook"
+        if not (
+            ansible_playbook_executable.exists()
+            and ansible_playbook_executable.is_file()
+            and os.access(ansible_playbook_executable, os.X_OK)
+        ):
+            raise AirflowException(
+                f"Ansible executable not found at {ansible_playbook_executable}"
+            )
+        if self.galaxy_collections:
+            galaxy_executable = self._bin_path / "ansible-galaxy"
+            if (
+                galaxy_executable.exists()
+                and galaxy_executable.is_file()
+                and os.access(galaxy_executable, os.X_OK)
+            ):
+                super()._install_galaxy_packages(
+                    galaxy_bin=str(galaxy_executable),
+                    HOME=self._env_dir,
+                )
+            else:
+                raise AirflowException(
+                    f"Galaxy executable not found at {galaxy_executable}"
+                )
 
     def on_kill(self):
         if self._tmp_dir:
