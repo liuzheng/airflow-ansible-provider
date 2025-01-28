@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-VERSION = "0.3.0"
-VERSIONs = [VERSION]
+VERSION = "0.4.0"
+VERSIONs = ["0.3.0", VERSION]
 
 
 def get_provider_info():
