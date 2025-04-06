@@ -30,6 +30,7 @@ from .ansible_operator import AnsibleOperator
 
 
 class VirtualAnsibleOperator(AnsibleOperator, PythonVirtualenvOperator):
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -50,13 +51,20 @@ class VirtualAnsibleOperator(AnsibleOperator, PythonVirtualenvOperator):
         Returns a hash and the data dict which is the base for the hash as text.
         """
         hash_dict = {
-            "requirements_list": self._requirements_list(),
-            "pip_install_options": self.pip_install_options,
-            "index_urls": self.index_urls,
-            "cache_key": str(Variable.get("PythonVirtualenvOperator.cache_key", "")),
-            "python_version": self.python_version,
-            "system_site_packages": self.system_site_packages,
-            "galaxy_collections": self.galaxy_collections,
+            "requirements_list":
+            self._requirements_list(),
+            "pip_install_options":
+            self.pip_install_options,
+            "index_urls":
+            self.index_urls,
+            "cache_key":
+            str(Variable.get("PythonVirtualenvOperator.cache_key", "")),
+            "python_version":
+            self.python_version,
+            "system_site_packages":
+            self.system_site_packages,
+            "galaxy_collections":
+            self.galaxy_collections,
         }
         hash_text = json.dumps(hash_dict, sort_keys=True)
         hash_object = hashlib_wrapper.md5(hash_text.encode())
@@ -67,36 +75,33 @@ class VirtualAnsibleOperator(AnsibleOperator, PythonVirtualenvOperator):
     def pre_execute(self, context: Context):
         super().pre_execute(context)
         if self.venv_cache_path:
-            self._env_dir = self._ensure_venv_cache_exists(Path(self.venv_cache_path))
+            self._env_dir = self._ensure_venv_cache_exists(
+                Path(self.venv_cache_path))
         else:
             self._tmp_dir = TemporaryDirectory(prefix="venv-")
             self._env_dir = Path(self._tmp_dir.name)
             self._prepare_venv(self._env_dir)
         self._bin_path = self._env_dir / "bin"
         ansible_playbook_executable = self._bin_path / "ansible-playbook"
-        if not (
-            ansible_playbook_executable.exists()
-            and ansible_playbook_executable.is_file()
-            and os.access(ansible_playbook_executable, os.X_OK)
-        ):
+        if not (ansible_playbook_executable.exists()
+                and ansible_playbook_executable.is_file()
+                and os.access(ansible_playbook_executable, os.X_OK)):
             raise AirflowException(
                 f"Ansible executable not found at {ansible_playbook_executable}"
             )
         if self.galaxy_collections:
             galaxy_executable = self._bin_path / "ansible-galaxy"
-            if (
-                galaxy_executable.exists()
-                and galaxy_executable.is_file()
-                and os.access(galaxy_executable, os.X_OK)
-            ):
+            if (galaxy_executable.exists() and galaxy_executable.is_file()
+                    and os.access(galaxy_executable, os.X_OK)):
                 super()._install_galaxy_packages(
                     galaxy_bin=str(galaxy_executable),
                     HOME=self._env_dir,
                 )
+                self.ansible_envvars["ANSIBLE_COLLECTIONS_PATH"] = str(
+                    self._env_dir / ".ansible" / "collections")
             else:
                 raise AirflowException(
-                    f"Galaxy executable not found at {galaxy_executable}"
-                )
+                    f"Galaxy executable not found at {galaxy_executable}")
 
     def on_kill(self):
         if self._tmp_dir:

@@ -149,6 +149,7 @@ class AnsibleOperator(BaseOperator):
         ansible_timeout: Union[int, None] = None,
         # git_extra: Union[dict, None] = None,
         ansible_vars: dict = None,
+        ansible_envvars: dict = None,
         galaxy_collections: list[str] | None = None,
         op_args: Collection[Any] | None = None,
         op_kwargs: Mapping[str, Any] | None = None,
@@ -169,6 +170,7 @@ class AnsibleOperator(BaseOperator):
         self.ansible_timeout = ansible_timeout
         # self.git_extra = git_extra
         self.ansible_vars = ansible_vars
+        self.ansible_envvars = ansible_envvars or {}
         self.op_args = op_args or ()
         self.op_kwargs = op_kwargs or {}
         self.galaxy_collections = galaxy_collections
@@ -255,7 +257,8 @@ class AnsibleOperator(BaseOperator):
 
         # tip: this will default inventory was a str for path, cannot pass it as ini
         if isinstance(self.inventory, str):
-            self.inventory = os.path.join(self.project_dir, self.path, self.inventory)
+            self.inventory = os.path.join(
+                self.project_dir, self.path, self.inventory)
         self._install_galaxy_packages()
 
     def _install_galaxy_packages(
@@ -290,6 +293,8 @@ class AnsibleOperator(BaseOperator):
             binary = f"{self._bin_path}/ansible-playbook"
         r = ansible_run(
             binary=binary,
+            cmdline=self.playbook,  # fix: ansible_runner.run ExecutionMode.RAW for binary is set
+            envvars=self.ansible_envvars,
             ssh_key=self._ansible_hook.pkey,
             passwords=[self._ansible_hook.password],
             quiet=True,
