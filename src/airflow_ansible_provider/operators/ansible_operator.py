@@ -17,15 +17,18 @@
 from __future__ import annotations
 
 import base64
+import datetime
 import json
 import os
 import sys
+import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Collection, Iterable, Mapping, Sequence, Tuple, Union
 
 import airflow.models.xcom_arg
 import ansible_runner
+import boto3
 from airflow.exceptions import AirflowException
 from airflow.lineage import apply_lineage, prepare_lineage
 from airflow.models import Connection, Variable
@@ -35,6 +38,7 @@ from airflow.utils.context import Context
 from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
 from ansible_runner.interface import init_runner
 from ansible_runner.runner_config import ExecutionMode
+from botocore.config import Config
 
 from airflow_ansible_provider.hooks.ansible import AnsibleHook
 
@@ -531,12 +535,6 @@ class AnsibleOperator(PythonVirtualenvOperator):
         return context["ansible_return"]
 
     def save_on_s3(self, context):
-        import datetime
-        import zipfile
-
-        import boto3
-        from botocore.config import Config
-
         # make sure zip dir exists
         zip_dir = os.path.join(
             self.artifact_dir,
