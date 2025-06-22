@@ -1,4 +1,5 @@
 ansible
-ansible_runner
+ansible-core
+ansible-runner
 gitpython
 boto3
