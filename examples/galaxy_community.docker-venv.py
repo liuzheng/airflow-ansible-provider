@@ -7,7 +7,7 @@ from datetime import datetime
 from airflow.decorators import dag, task
 from airflow.models.param import Param
 from airflow.operators.python import get_current_context
-from airflow_ansible_provider.decorators import ansible_venv_task
+from airflow_ansible_provider.decorators import ansible_task
 
 
 @task(task_id="gen_inventory")
@@ -26,7 +26,7 @@ def gen_inventory():
     }
 
 
-@ansible_venv_task(
+@ansible_task(
     task_id="docker_pull",
     playbook="docker.pull.yml",
     get_ci_events=True,

@@ -16,23 +16,27 @@
 # under the License.
 from __future__ import annotations
 
+import base64
 import json
 import os
-from typing import Any, Collection, Mapping, Sequence, Union
+import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Any, Collection, Iterable, Mapping, Sequence, Tuple, Union
 
 import airflow.models.xcom_arg
+import ansible_runner
+from airflow.exceptions import AirflowException
+from airflow.lineage import apply_lineage, prepare_lineage
+from airflow.models import Connection, Variable
+from airflow.operators.python import PythonVirtualenvOperator
+from airflow.utils import hashlib_wrapper
+from airflow.utils.context import Context
+from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
 from ansible_runner.interface import init_runner
 from ansible_runner.runner_config import ExecutionMode
-from airflow.lineage import apply_lineage, prepare_lineage
-from airflow.models.baseoperator import BaseOperator
-from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
-from airflow.utils.context import Context
-from airflow.exceptions import AirflowException
 
-# from airflow_ansible_provider.utils.sync_git_repo import sync_repo
-# from airflow_ansible_provider.utils.kms import get_secret
 from airflow_ansible_provider.hooks.ansible import AnsibleHook
-
 
 ALL_KEYS = {}
 ANSIBLE_PRIVATE_DATA_DIR = "/tmp/ansible_runner" or os.environ.get(
@@ -48,7 +52,6 @@ ANSIBLE_EVENT_STATUS = {
     "runner_on_unreachable": "unreachable",
     "on_any": "unknown",
 }
-ANSIBLE_DEFAULT_VARS = {}
 
 
 def ansible_run(**kwargs):
@@ -60,11 +63,12 @@ def ansible_run(**kwargs):
     return r
 
 
-class AnsibleOperator(BaseOperator):
+class AnsibleOperator(PythonVirtualenvOperator):
     """
     Run an Ansible Runner task in the foreground and return a Runner object when complete.
 
     :param str playbook: The playbook (as a path relative to ``private_data_dir/project``) that will be invoked by runner when executing Ansible.
+    :param str playbook_yaml: The playbook
     :param dict or list roles_path: Directory or list of directories to assign to ANSIBLE_ROLES_PATH
     :param str or dict or list inventory: Overrides the inventory directory/file (supplied at ``private_data_dir/inventory``) with
         a specific host or list of hosts. This can take the form of:
@@ -77,7 +81,7 @@ class AnsibleOperator(BaseOperator):
     :param int forks: Control Ansible parallel concurrency
     :param str artifact_dir: The path to the directory where artifacts should live, this defaults to 'artifacts' under the private data dir
     :param str project_dir: The path to the directory where the project is located, default will use the setting in conn_id
-    :param int timeout: The timeout value in seconds that will be passed to either ``pexpect`` of ``subprocess`` invocation
+    :param int ansible_timeout: The timeout value in seconds that will be passed to either ``pexpect`` of ``subprocess`` invocation
                     (based on ``runner_mode`` selected) while executing command. It the timeout is triggered it will force cancel the
                     execution.
     :param dict extravars: Extra variables to be passed to Ansible at runtime using ``-e``. Extra vars will also be
@@ -86,7 +90,8 @@ class AnsibleOperator(BaseOperator):
     :param str ansible_conn_id: The ansible connection
     :param list kms_keys: The list of KMS keys to be used to decrypt the ansible extra vars
     :param str path: The path to run the playbook under project directory
-    :param str conn_id: The connection ID for the playbook git repo
+    :param str git_repo_conn_id: The connection ID for the playbook git repo
+    :param str s3_conn_id: The connection ID for the S3 bucket to save the artifacts
     :param dict git_extra: Extra arguments to pass to the git clone command, e.g. {"branch": "prod"} {"tag": "v1.0.0"} {"commit_id": "123456"}
     :param list tags: List of tags to run
     :param list skip_tags: List of tags to skip
@@ -95,6 +100,7 @@ class AnsibleOperator(BaseOperator):
 
     operator_fields: Sequence[str] = (
         "playbook",
+        "playbook_yaml",
         "inventory",
         "roles_path",
         "extravars",
@@ -111,7 +117,6 @@ class AnsibleOperator(BaseOperator):
     )
     template_fields_renderers = {
         "conn_id": "ansible_default",
-        # "kms_keys": None,
         "path": "",
         "inventory": None,
         "artifact_dir": None,
@@ -133,11 +138,11 @@ class AnsibleOperator(BaseOperator):
         self,
         *,
         playbook: str = "",
-        conn_id: str = "ansible_default",
-        # kms_keys: Union[list, None] = None,
+        playbook_yaml: str = "",
+        git_repo_conn_id: str = "ansible_default",
+        s3_conn_id: str = "",
         path: str = "",
         inventory: Union[dict, str, list, None] = None,
-        # conn_id: str = ANSIBLE_PLYBOOK_PROJECT,
         artifact_dir: str | None = None,
         project_dir: str | None = None,
         roles_path: Union[dict, list] = None,
@@ -147,20 +152,38 @@ class AnsibleOperator(BaseOperator):
         get_ci_events: bool = False,
         forks: int = 10,
         ansible_timeout: Union[int, None] = None,
-        # git_extra: Union[dict, None] = None,
+        git_extra: Union[dict, None] = None,
         ansible_vars: dict = None,
         ansible_envvars: dict = None,
+        become_user: str = None,
+        become_method: str = None,
+        become_password: str = None,
+        become_exe: str = None,
+        become_flags: str = None,
+        requirements: None | Iterable[str] | str = None,
+        venv_cache_path: None | os.PathLike[str] = None,
         galaxy_collections: list[str] | None = None,
         op_args: Collection[Any] | None = None,
         op_kwargs: Mapping[str, Any] | None = None,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(
+            requirements=requirements,
+            system_site_packages=True,  # todo: 当前有些问题，只能true
+            venv_cache_path=venv_cache_path,
+            pip_install_options=[
+                "--ignore-installed",
+                "--force-reinstall",
+                "--disable-pip-version-check",
+                "--no-color",
+            ],
+            **kwargs,
+        )
         self.playbook = playbook
-        # self.kms_keys = kms_keys
+        self.playbook_yaml = playbook_yaml
         self.path = path
         self.inventory = inventory
-        # self.conn_id = conn_id
+        self.s3_conn_id = s3_conn_id
         self.roles_path = roles_path
         self.extravars = extravars or {}
         self.tags = tags
@@ -168,19 +191,31 @@ class AnsibleOperator(BaseOperator):
         self.get_ci_events = get_ci_events
         self.forks = forks
         self.ansible_timeout = ansible_timeout
-        # self.git_extra = git_extra
+        self.git_extra = git_extra
         self.ansible_vars = ansible_vars
         self.ansible_envvars = ansible_envvars or {}
+        self.become_user = become_user
+        self.become_method = become_method
+        self.become_password = become_password
+        self.become_exe = become_exe
+        self.become_flags = become_flags
+
         self.op_args = op_args or ()
         self.op_kwargs = op_kwargs or {}
         self.galaxy_collections = galaxy_collections
 
         self.ci_events = {}
         self.last_event = {}
+        self._runner_ident = None
+        self._context = None
+        self._tmp_dir = None
+        self._env_dir = None
+        self._bin_path = None
+        self._collections_paths = []
         self.log.debug("playbook: %s", self.playbook)
         self.log.debug("playbook type: %s", type(self.playbook))
 
-        self._ansible_hook = AnsibleHook(conn_id=conn_id)
+        self._ansible_hook = AnsibleHook(conn_id=git_repo_conn_id)
         self.extravars["ansible_user"] = self._ansible_hook.username
         self.extravars["ansible_port"] = self._ansible_hook.port
         self.extravars["ansible_connection"] = "ssh"
@@ -188,11 +223,6 @@ class AnsibleOperator(BaseOperator):
         self.artifact_dir = (
             artifact_dir or self._ansible_hook.ansible_artifact_directory
         )
-        self._tmp_dir = None
-        self._env_dir = None
-        self._bin_path = None
-
-        # todo: add the timeouts
 
     def event_handler(self, data):
         """event handler"""
@@ -200,22 +230,74 @@ class AnsibleOperator(BaseOperator):
             self.ci_events[data["event_data"]["host"]] = data
         self.last_event = data
         self.log.info("event: %s", self.last_event)
+        if not self._runner_ident and data.get("runner_ident"):
+            # 执行过程中先获取到 runner_ident，便于日志即时观察输出
+            self._context["ti"].xcom_push(
+                key="runner_id", value=data.get("runner_ident")
+            )
+            self._runner_ident = data.get("runner_ident")
 
-    # def get_key(self, kms_key: None) -> Optional[dict]:
-    #     """get ssh key"""
-    #     global ALL_KEYS  # pylint: disable=global-variable-not-assigned
-    #     if kms_key in ALL_KEYS:
-    #         return ALL_KEYS[kms_key]
-    #     if kms_key is None:
-    #         return None
-    #     _, pwdValue = get_secret(token=kms_key)
-    #     if pwdValue is None:
-    #         return None
-    #     try:
-    #         ALL_KEYS[kms_key] = base64.b64decode(pwdValue).decode("utf-8")
-    #         return ALL_KEYS[kms_key]
-    #     except Exception:  # pylint: disable=broad-except
-    #         return None
+    def _calculate_cache_hash(self) -> Tuple[str, str]:
+        """
+        Calculate a cache hash based on the cache key and galaxy collections.
+        This method generates a hash value and its corresponding hash text
+        by combining the cache key retrieved from an Airflow Variable and
+        the galaxy collections associated with the operator. The hash is
+        computed using an MD5 algorithm.
+        Returns:
+            Tuple[str, str]: A tuple containing:
+                - The first 8 characters of the MD5 hash (requirements_hash).
+                - The JSON string representation of the hash dictionary (hash_text).
+        """
+
+        hash_dict = {
+            "cache_key": str(Variable.get("AnsibleOperator.cache_key", "")),
+            "galaxy_collections": self.galaxy_collections,
+        }
+        hash_text = json.dumps(hash_dict, sort_keys=True)
+        hash_object = hashlib_wrapper.md5(hash_text.encode())
+        requirements_hash = hash_object.hexdigest()
+        return requirements_hash[:8], hash_text
+
+    def _install_galaxy_packages(self):
+        if self.venv_cache_path:
+            self._env_dir = self._ensure_venv_cache_exists(Path(self.venv_cache_path))
+        else:
+            self._tmp_dir = TemporaryDirectory(prefix="venv-")
+            self._env_dir = Path(self._tmp_dir.name)
+            self._prepare_venv(self._env_dir)
+        self._bin_path = self._env_dir / "bin"
+        if self.galaxy_collections:
+            ansible_galaxy_binary = self._bin_path / "ansible-galaxy"
+            if not (
+                ansible_galaxy_binary.exists()
+                and ansible_galaxy_binary.is_file()
+                and os.access(ansible_galaxy_binary, os.X_OK)
+            ):
+                ansible_galaxy_binary = "/home/airflow/.local/bin/ansible-galaxy"
+            for galaxy_pkg in self.galaxy_collections or []:
+                execute_in_subprocess_with_kwargs(
+                    cmd=[
+                        str(ansible_galaxy_binary),
+                        "collection",
+                        "install",
+                        f"{galaxy_pkg}",
+                        "--collections-path",
+                        str(self._env_dir / ".ansible" / "collections"),
+                    ],
+                    env=(
+                        {
+                            "HTTPS_PROXY": Variable.get("ANSIBLE_GALAXY_PROXY", ""),
+                            "PYTHONPATH": ":".join(sys.path),
+                            "HOME": self._env_dir,
+                        }
+                        if self._env_dir
+                        else None
+                    ),
+                )
+            self._collections_paths.append(
+                str(self._env_dir / ".ansible" / "collections")
+            )
 
     @prepare_lineage
     def pre_execute(self, context: Context):
@@ -234,48 +316,129 @@ class AnsibleOperator(BaseOperator):
         #     pwdKey, pwdValue = get_secret(token=t)
         #     if pwdKey and pwdKey not in self.extravars:
         #         self.extravars[pwdKey] = pwdValue
-        for k, v in ANSIBLE_DEFAULT_VARS.items():
-            if k not in self.extravars:
-                self.extravars[k] = v
-        # self.log.debug("conn_id: %s", self.conn_id)
-        # self.log.debug("git_extra: %s", self.git_extra)
-        # self.project_dir = sync_repo(conn_id=self.conn_id, extra=self.git_extra)
+        # for k, v in ANSIBLE_DEFAULT_VARS.items():
+        #     if k not in self.extravars:
+        #         self.extravars[k] = v
         self.log.info(
             "project_dir: %s, project path: %s, playbook: %s",
             self.project_dir,
             self.path,
             self.playbook,
         )
-        # if self.project_dir == "":
-        #     self.log.critical("project_dir is empty")
-        #     raise AirflowException("project_dir is empty")
-        # if not os.path.exists(self.project_dir):
-        #     self.log.critical("project_dir is not exist")
-        #     raise AirflowException("project_dir is not exist")
-        if not os.path.exists(self.artifact_dir):
-            os.makedirs(self.artifact_dir)
+        if self.playbook_yaml:
+            self._tmp_playbook = TemporaryDirectory(prefix="temp-playbook-")
+            self.project_dir = self._tmp_playbook.name
+            self.playbook = os.path.join(self.project_dir, "playbook.yml")
+            with open(self.playbook, "w", encoding="utf-8") as f:
+                playbook_data = base64.b64decode(self.playbook_yaml).decode("utf-8")
+                f.write(playbook_data)
+        else:
+            self.log.info(
+                "project_dir: %s, project path: %s, playbook: %s",
+                self.project_dir,
+                self.path,
+                self.playbook,
+            )
+            if self.project_dir == "":
+                self.log.critical("project_dir is empty")
+                raise AirflowException("project_dir is empty")
+            if not os.path.exists(self.project_dir):
+                self.log.critical("project_dir is not exist")
+                raise AirflowException("project_dir is not exist")
+            if not os.path.exists(self.artifact_dir):
+                os.makedirs(self.artifact_dir)
 
+        # 处理 ansible inventory数据
+        if isinstance(
+            self.inventory, dict
+        ):  # todo: 暂时仅兼容dict类型的inventory,自定义的inventory不支持 ansible_ssh_common_args
+            for group_name, group_data in self.inventory.items():
+                if not isinstance(group_data, dict):
+                    continue
+                if group_name == "_meta":
+                    # 处理meta类变量
+                    for host_key, host_vars in group_data.get("hostvars", {}).items():
+                        # 默认不允许用户传递"ansible_ssh_common_args"参数
+                        if "ansible_ssh_common_args" in host_vars:
+                            del self.inventory[group_name]["hostvars"][host_key][
+                                "ansible_ssh_common_args"
+                            ]
+                        # 仅当主机变量中存在特殊 idc 时配置ansible_ssh_common_args参数
+                        if "idc" in host_vars and Variable.get(
+                            "SSH_COMMON_ARGS-" + host_vars["idc"], default_var=None
+                        ):
+                            self.inventory[group_name]["hostvars"][host_key][
+                                "ansible_ssh_common_args"
+                            ] = Variable.get(
+                                "SSH_COMMON_ARGS-" + host_vars["idc"], default_var=None
+                            )
+                    continue
+                # 处理主机配置
+                if "hosts" in group_data:
+                    for host_key, host_vars in group_data.get("hosts", {}).items():
+                        # 默认不允许用户传递"ansible_ssh_common_args"参数
+                        if "ansible_ssh_common_args" in host_vars:
+                            del self.inventory[group_name]["hosts"][host_key][
+                                "ansible_ssh_common_args"
+                            ]
+                        # 仅当主机变量中存在特殊 idc 时配置ansible_ssh_common_args参数
+                        if "idc" in host_vars and Variable.get(
+                            "SSH_COMMON_ARGS-" + host_vars["idc"], default_var=None
+                        ):
+                            self.inventory[group_name]["hosts"][host_key][
+                                "ansible_ssh_common_args"
+                            ] = Variable.get(
+                                "SSH_COMMON_ARGS-" + host_vars["idc"], default_var=None
+                            )
+                # 处理组变量配置
+                if "vars" in group_data:
+                    # 默认不允许用户传递"ansible_ssh_common_args"参数
+                    if "ansible_ssh_common_args" in group_data.get("vars", {}):
+                        del self.inventory[group_name]["vars"][
+                            "ansible_ssh_common_args"
+                        ]
+                    # 仅当主机变量中存在特殊 idc 时配置ansible_ssh_common_args参数
+                    if "idc" in group_data["vars"] and Variable.get(
+                        "SSH_COMMON_ARGS-" + group_data["vars"]["idc"], default_var=None
+                    ):
+                        self.inventory[group_name]["vars"][
+                            "ansible_ssh_common_args"
+                        ] = Variable.get(
+                            "SSH_COMMON_ARGS-" + group_data["vars"]["idc"],
+                            default_var=None,
+                        )
+            # inventory全局变量
+            self.inventory["all"] = {
+                "vars": Variable.get("ANSIBLE_DEFAULT_VARS", default_var={}),
+            }
+            if self.become_user is not None:
+                self.inventory["all"]["vars"]["ansible_become"] = True
+                self.inventory["all"]["vars"]["ansible_become_user"] = self.become_user
+                if self.become_method is not None:
+                    self.inventory["all"]["vars"][
+                        "ansible_become_method"
+                    ] = self.become_method
+                if self.become_password is not None:
+                    self.inventory["all"]["vars"][
+                        "ansible_become_password"
+                    ] = self.become_password
+                if self.become_exe is not None:
+                    self.inventory["all"]["vars"][
+                        "ansible_become_exe"
+                    ] = self.become_exe
+                if self.become_flags is not None:
+                    self.inventory["all"]["vars"][
+                        "ansible_become_flags"
+                    ] = self.become_flags
         # tip: this will default inventory was a str for path, cannot pass it as ini
         if isinstance(self.inventory, str):
-            self.inventory = os.path.join(
-                self.project_dir, self.path, self.inventory)
-        self._install_galaxy_packages()
-
-    def _install_galaxy_packages(
-        self, galaxy_bin: str = "ansible-galaxy", HOME: str = None
-    ):
-        for galaxy_pkg in self.galaxy_collections or []:
-            execute_in_subprocess_with_kwargs(
-                cmd=[
-                    galaxy_bin,
-                    "collection",
-                    "install",
-                    f"{galaxy_pkg}",
-                ],
-                env={"HOME": HOME} if HOME else None,
-            )
+            self.inventory = os.path.join(self.project_dir, self.path, self.inventory)
+        # 处理 galaxy_collections
+        if self.galaxy_collections is not None:
+            self._install_galaxy_packages()
 
     def execute(self, context: Context):
+        self._context = context
         self.log.info(
             "playbook: %s, roles_path: %s, project_dir: %s, inventory: %s, project_dir: %s, extravars: %s, tags: %s, "
             "skip_tags: %s",
@@ -288,13 +451,20 @@ class AnsibleOperator(BaseOperator):
             self.tags,
             self.skip_tags,
         )
-        binary = "ansible-playbook"
+        ansible_binary = "/home/airflow/.local/bin/ansible-playbook"
         if self._bin_path is not None:
-            binary = f"{self._bin_path}/ansible-playbook"
-        r = ansible_run(
-            binary=binary,
+            ansible_binary = self._bin_path / "ansible-playbook"
+            if not (
+                ansible_binary.exists()
+                and ansible_binary.is_file()
+                and os.access(ansible_binary, os.X_OK)
+            ):
+                ansible_binary = "/home/airflow/.local/bin/ansible-playbook"
+        # r = ansible_run(
+        r = ansible_runner.run(
+            binary=ansible_binary,
             cmdline=self.playbook,  # fix: ansible_runner.run ExecutionMode.RAW for binary is set
-            envvars=self.ansible_envvars,
+            envvars={"ANSIBLE_COLLECTIONS_PATH": ":".join(self._collections_paths)},
             ssh_key=self._ansible_hook.pkey,
             passwords=[self._ansible_hook.password],
             quiet=True,
@@ -355,10 +525,100 @@ class AnsibleOperator(BaseOperator):
             "last_event": self.last_event,
             "ci_events": self.ci_events,
         }
-        context["ti"].xcom_push(key="runner_id", value=r.config.ident)
-        if r.status == "successful":
-            return context["ansible_return"]
-        raise AirflowException(f"Ansible run playbook failed: {r.status}")
+        try:
+            self.save_on_s3(context)
+            self.log.info("Saved on s3: %s", context.get("s3_path_url"))
+        except Exception as e:
+            self.log.warning("Failed to save on s3, Error: %s", e)
+        return context["ansible_return"]
+
+    def save_on_s3(self, context):
+        import datetime
+        import zipfile
+
+        import boto3
+        from botocore.config import Config
+
+        # make sure zip dir exists
+        zip_dir = os.path.join(
+            self.artifact_dir,
+            datetime.datetime.now().strftime("%Y-%m-%d"),
+            context["run_id"],
+        )
+        if not os.path.exists(zip_dir):
+            os.makedirs(zip_dir)
+        # Zip the artifact_path
+        params_file_content = context["dag_run"].conf
+        params_file_path = os.path.join(
+            self.artifact_dir, f"{context['ansible_return']['ident']}", "params.json"
+        )
+        ansible_return_path = os.path.join(
+            self.artifact_dir,
+            f"{context['ansible_return']['ident']}",
+            "ansible_return.json",
+        )
+        # 将参数写入文件
+        with open(params_file_path, "w", encoding="utf-8") as f:
+            json.dump(params_file_content, f, indent=4)
+        with open(ansible_return_path, "w", encoding="utf-8") as f:
+            json.dump(context["ansible_return"], f, indent=4)
+
+        ansible_inventory_file = context["ansible_return"]["inventory"]
+        ansible_stdout_file = os.path.join(
+            self.artifact_dir, f"{context['ansible_return']['ident']}", "stdout"
+        )
+        ansible_stderr_file = os.path.join(
+            self.artifact_dir, f"{context['ansible_return']['ident']}", "stderr"
+        )
+        ansible_rc_file = os.path.join(
+            self.artifact_dir, f"{context['ansible_return']['ident']}", "rc"
+        )
+        ansible_status_file = os.path.join(
+            self.artifact_dir, f"{context['ansible_return']['ident']}", "status"
+        )
+        # ansible_command_file = os.path.join(
+        #     self.artifact_dir, f"{context['ansible_return']['ident']}", "command"
+        # ) # 由于其存在敏感信息以及无必要长期存储的需求，暂时不存储
+
+        zip_file = os.path.join(
+            zip_dir, f"ansible-{context['ansible_return']['ident']}.zip"
+        )
+
+        with zipfile.ZipFile(zip_file, "w") as z:
+            z.write(params_file_path, arcname=os.path.basename(params_file_path))
+            z.write(ansible_return_path, arcname=os.path.basename(ansible_return_path))
+            z.write(
+                ansible_inventory_file, arcname=os.path.basename(ansible_inventory_file)
+            )
+            z.write(ansible_stdout_file, arcname=os.path.basename(ansible_stdout_file))
+            z.write(ansible_stderr_file, arcname=os.path.basename(ansible_stderr_file))
+            z.write(ansible_rc_file, arcname=os.path.basename(ansible_rc_file))
+            z.write(ansible_status_file, arcname=os.path.basename(ansible_status_file))
+            # z.write(ansible_command_file, arcname=os.path.basename(ansible_command_file))
+
+        self.log.info("Zipped artifact path: %s", zip_file)
+        # Upload the zip file to s3
+        if self.s3_conn_id is None or self.s3_conn_id == "":
+            raise AirflowException("s3_conn_id is not set, skip saving on s3")
+        c = Connection.get_connection_from_secrets(conn_id=self.s3_conn_id)
+        extra = json.loads(c.extra)
+        s3_url = extra.get("url")
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=c.login,
+            aws_secret_access_key=c.password,
+            endpoint_url=c.host,
+            config=Config(
+                s3={"addressing_style": extra.get("addressing_style", "path")}
+            ),  # idc: path, oss or aws: virtual
+            verify=False,
+        )
+        zip_key = os.path.relpath(zip_file, self.artifact_dir)
+        with open(zip_file, "rb") as f:
+            s3.upload_fileobj(f, extra.get("bucket_name"), zip_key)
+        context["s3_path_url"] = f"{s3_url}/{zip_key}"
+        context["ti"].xcom_push(key="s3_path_url", value=context["s3_path_url"])
+        self.log.info("Uploaded artifact to s3: %s", context["s3_path_url"])
 
     @apply_lineage
     def post_execute(self, context: Any, result: Any = None):
@@ -370,19 +630,6 @@ class AnsibleOperator(BaseOperator):
         self.log.debug("post_execute context: %s", context)
         # Discuss whether to compress the results and transfer them to storage
         return
-        artifact_path = os.path.join(self.artifact_dir, result["ident"])
-        artifact_result_file = os.path.join(artifact_path, "result.txt")
-        with open(artifact_result_file, "w", encoding="utf-8") as f:
-            f.write(json.dumps(result, indent=4))
-        # Zip the artifact_path
-        zip_file = os.path.join(
-            self.artifact_dir,
-            context["start_date"].strftime("%Y-%m-%d"),
-            f"{context['run_id']}.zip",
-        )
-        os.system(f"zip -r {zip_file} {artifact_path}")
-        self.log.info("Zipped artifact path: %s", zip_file)
-        # todo: upload to some storage
 
     def on_kill(self) -> None:
         """
@@ -391,3 +638,5 @@ class AnsibleOperator(BaseOperator):
         Any use of the threading, subprocess or multiprocessing module within an
         operator needs to be cleaned up, or it will leave ghost processes behind.
         """
+        if self._tmp_playbook:
+            self._tmp_playbook.cleanup()

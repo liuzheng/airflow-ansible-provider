@@ -2,12 +2,11 @@
 import fcntl
 import json
 import os
-
 from git import Repo  # pip install gitpython
 
 from airflow.models import Connection
 
-GIT_PATH = "/tmp/git_repos/"
+GIT_PATH = "/opt/git_repos/"
 
 
 def sync_repo(conn_id: str, extra=None) -> str:
@@ -29,30 +28,36 @@ def sync_repo(conn_id: str, extra=None) -> str:
         commit = extra["commit_id"]
         reset_to = commit
         copy_to = ""
+        path_to_dir = f"{GIT_PATH}{conn_id}/{commit}"
     elif extra.get("tag") is not None:
-        commit = extra.get("tag")
-        reset_to = commit
-        copy_to = "&& git rev-parse HEAD | xargs -I{} rsync -a --delete `pwd`/ `pwd`/../{}"
+        tag = extra.get("tag")
+        commit = f"refs/tags/{tag}:refs/tags/{tag}"
+        path_to_dir = f"{GIT_PATH}{conn_id}/{tag}"
+        reset_to = "refs/tags/" + tag
+        copy_to = (
+            "&& git rev-parse HEAD | xargs -I{} rsync -a --delete `pwd`/ `pwd`/../{}"
+        )
     else:
         commit = extra.get("branch", "main")
+        path_to_dir = f"{GIT_PATH}{conn_id}/{commit}"
         reset_to = "remotes/origin/" + commit
-        copy_to = "&& git rev-parse HEAD | xargs -I{} rsync -a --delete `pwd`/ `pwd`/../{}"
-    path_to_dir = f"{GIT_PATH}{conn_id}/{commit}"
+        copy_to = (
+            "&& git rev-parse HEAD | xargs -I{} rsync -a --delete `pwd`/ `pwd`/../{}"
+        )
     show_path = "&& git rev-parse HEAD | xargs -I{} echo `pwd`/../{}"
     if os.path.exists(path_to_dir):
         repo = Repo(path_to_dir)
     else:
+        # todo: 当git异常或者repo异常
         repo = Repo.init(path_to_dir)
-
     lock_file_path = path_to_dir + ".lock"
     if not os.path.exists(lock_file_path):
-        open(lock_file_path, "w", encoding="utf-8").close()
-
+        open(lock_file_path, "w").close()
     with open(path_to_dir + ".lock", "r", encoding="utf-8") as f:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX)
         if "origin" not in repo.remotes:
             repo.create_remote("origin", git_repo)
         elif repo.remotes["origin"].url != git_repo:
             repo.remotes["origin"].set_url(git_repo)
-        cmd = f"cd {path_to_dir} && git -c http.sslVerify=false fetch -f --depth 1 -q && git reset -q --hard {reset_to} {copy_to} {show_path}"
+        cmd = f"cd {path_to_dir} && git -c http.sslVerify=false fetch -f --depth 1 -q  origin {commit} && git reset -q --hard {reset_to} {copy_to} {show_path}"
         return os.popen(cmd).read().strip()
