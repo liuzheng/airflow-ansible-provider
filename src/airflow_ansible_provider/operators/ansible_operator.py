@@ -223,6 +223,8 @@ class AnsibleOperator(PythonVirtualenvOperator):
         self.artifact_dir = (
             artifact_dir or self._ansible_hook.ansible_artifact_directory
         )
+        if self.playbook_yaml:
+            self._tmp_playbook = TemporaryDirectory(prefix="temp-playbook-")
 
     def event_handler(self, data):
         """event handler"""
@@ -322,8 +324,7 @@ class AnsibleOperator(PythonVirtualenvOperator):
             self.path,
             self.playbook,
         )
-        if self.playbook_yaml:
-            self._tmp_playbook = TemporaryDirectory(prefix="temp-playbook-")
+        if self._tmp_playbook:
             self.project_dir = self._tmp_playbook.name
             self.playbook = os.path.join(self.project_dir, "playbook.yml")
             with open(self.playbook, "w", encoding="utf-8") as f:
