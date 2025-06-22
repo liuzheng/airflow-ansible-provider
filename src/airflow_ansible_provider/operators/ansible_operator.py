@@ -316,9 +316,6 @@ class AnsibleOperator(PythonVirtualenvOperator):
         #     pwdKey, pwdValue = get_secret(token=t)
         #     if pwdKey and pwdKey not in self.extravars:
         #         self.extravars[pwdKey] = pwdValue
-        # for k, v in ANSIBLE_DEFAULT_VARS.items():
-        #     if k not in self.extravars:
-        #         self.extravars[k] = v
         self.log.info(
             "project_dir: %s, project path: %s, playbook: %s",
             self.project_dir,

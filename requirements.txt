@@ -1,3 +1,4 @@
 ansible
 ansible_runner
 gitpython
+boto3
