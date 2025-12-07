@@ -28,16 +28,25 @@ from typing import Any, Collection, Iterable, Mapping, Sequence, Tuple, Union
 
 import airflow.models.xcom_arg
 import ansible_runner
+
+# 使用兼容性模块
+from airflow_ansible_provider.compat import (
+    PythonVirtualenvOperator,
+    Context,
+    prepare_lineage,
+)
+
+# 其他必要导入
 import boto3
+import hashlib as hashlib_wrapper
+from ansible_runner import init_runner
+from ansible_runner.config import ExecutionMode
 from airflow.exceptions import AirflowException
-from airflow.lineage import apply_lineage, prepare_lineage
-from airflow.models import Connection, Variable
-from airflow.operators.python import PythonVirtualenvOperator
-from airflow.utils import hashlib_wrapper
-from airflow.utils.context import Context
+from airflow.models import Variable, Connection
+from airflow.utils.context import apply_lineage
+from airflow.operators.subdag_operator import SubDagOperator
 from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
-from ansible_runner.interface import init_runner
-from ansible_runner.runner_config import ExecutionMode
+
 from botocore.config import Config
 
 from airflow_ansible_provider.hooks.ansible import AnsibleHook

@@ -20,9 +20,12 @@
 from __future__ import annotations
 
 import os
+import warnings
+
+# 使用兼容性模块
+from airflow_ansible_provider.compat import BaseHook
 
 # from base64 import decodebytes
-import warnings
 from collections.abc import Sequence
 from functools import cached_property
 from io import StringIO
@@ -34,7 +37,6 @@ from sshtunnel import SSHTunnelForwarder
 from tenacity import Retrying, stop_after_attempt, wait_fixed, wait_random
 
 from airflow.exceptions import AirflowException
-from airflow.hooks.base import BaseHook
 from airflow.utils.platform import getuser
 from airflow.utils.types import NOTSET, ArgNotSet
 from airflow.utils.log.secrets_masker import mask_secret
