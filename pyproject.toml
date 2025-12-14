@@ -4,3 +4,44 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "airflow-ansible-provider"
+dynamic = ["version"]
+description = "Enables execution of Ansible Task from Airflow"
+readme = "README.md"
+authors = [
+    {name = "liuzheng", email = "liuzheng712@gmail.com"}
+]
+license = {text = "Apache Software License"}
+requires-python = ">=3.8.0"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "apache-airflow >= 2.0.0",
+]
+
+[project.optional-dependencies]
+airflow-2 = ["apache-airflow >= 2.0.0, < 3.0.0"]
+airflow-3 = ["apache-airflow >= 3.0.0"]
+
+[project.urls]
+"Homepage" = "https://github.com/liuzheng/airflow-ansible-provider"
+"Bug Tracker" = "https://github.com/liuzheng/airflow-ansible-provider/issues"
+
+[project.entry-points."apache_airflow_provider"]
+provider_info = "airflow_ansible_provider.__init__:get_provider_info"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "airflow_ansible_provider.VERSION"}
+
+[project.entry-points."airflow.plugins"]
+airflow_ansible_plugin = "airflow_ansible_plugin.plugins:AirflowAnsiblePlugin"
