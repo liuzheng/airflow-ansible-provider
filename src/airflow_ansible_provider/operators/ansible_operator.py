@@ -44,7 +44,6 @@ from ansible_runner.config import ExecutionMode
 from airflow.exceptions import AirflowException
 from airflow.models import Variable, Connection
 from airflow.utils.context import apply_lineage
-from airflow.operators.subdag_operator import SubDagOperator
 from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
 
 from botocore.config import Config

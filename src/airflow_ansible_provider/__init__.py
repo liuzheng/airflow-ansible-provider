@@ -21,9 +21,9 @@ except ImportError:
 
 def get_provider_info():
     """
-    Get provider info
+    Get provider info for Airflow provider registry
     """
-    return {
+    provider_info = {
         "package-name": "airflow-ansible-provider",
         "name": "Airflow Ansible Provider",
         "description": "Run Ansible Playbook as Airflow Task",
@@ -32,10 +32,27 @@ def get_provider_info():
                 "hook-class-name": "airflow_ansible_provider.hooks.ansible.AnsibleHook",
                 "connection-type": "ansible",
             },
-            # {
-            #     "hook-class-name": "airflow_ansible_provider.hooks.GitHook",
-            #     "connection-type": "git",
-            # },
         ],
+        "extra-links": [],
+        "hook-class-names": [
+            "airflow_ansible_provider.hooks.ansible.AnsibleHook",
+        ],
+        "operator-class-names": [
+            "airflow_ansible_provider.operators.ansible_operator.AnsibleOperator",
+        ],
+        "task-decorators": [],
+        "transfers": [],
+        "sensors": [],
         "versions": VERSIONs,
     }
+
+    # 为 Airflow 3.x 添加额外的插件信息
+    if IS_AIRFLOW_3_PLUS:
+        provider_info["plugins"] = [
+            {
+                "name": "AirflowAnsiblePlugin",
+                "plugin-class": "airflow_ansible_provider.plugins.AirflowAnsiblePlugin",
+            }
+        ]
+
+    return provider_info

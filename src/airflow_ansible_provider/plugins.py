@@ -15,22 +15,48 @@
 # specific language governing permissions and limitations
 # under the License.
 from __future__ import annotations
+
+# 导入版本检测
+from airflow_ansible_provider import IS_AIRFLOW_3_PLUS
 from airflow.plugins_manager import AirflowPlugin
 
 
 class AirflowAnsiblePlugin(AirflowPlugin):
     name = "AirflowAnsiblePlugin"
+
+    def __init__(self):
+        super().__init__()
+        # 确保插件在不同版本中都能正确识别
+        if IS_AIRFLOW_3_PLUS:
+            # Airflow 3.x 特定配置
+            pass
+
+    # 添加插件描述信息
+    @property
+    def description(self):
+        return "Ansible Provider Plugin for Apache Airflow"
+
+    # 确保在插件页面显示版本信息
+    @property
+    def version(self):
+        from airflow_ansible_provider import VERSION
+
+        return VERSION
+
     # A list of references to inject into the macros namespace
     macros = []
-    # A list of dictionaries containing FastAPI app objects and some metadata. See the example below.
+
+    # A list of dictionaries containing FastAPI app objects and some metadata
     fastapi_apps = []
-    # A list of dictionaries containing FastAPI middleware factory objects and some metadata. See the example below.
+
+    # A list of dictionaries containing FastAPI middleware factory objects and some metadata
     fastapi_root_middlewares = []
-    # A list of dictionaries containing external views and some metadata. See the example below.
+
+    # A list of dictionaries containing external views and some metadata
     external_views = []
-    # A list of dictionaries containing react apps and some metadata. See the example below.
-    # Note: React apps are only supported in Airflow 3.1 and later.
-    # Note: The React app integration is experimental and interfaces might change in future versions. Particularly, dependency and state interactions between the UI and plugins may need to be refactored for more complex plugin apps.
+
+    # A list of dictionaries containing react apps and some metadata
+    # Note: React apps are only supported in Airflow 3.1 and later
     react_apps = []
 
     # A callback to perform actions when Airflow starts and the plugin is loaded.

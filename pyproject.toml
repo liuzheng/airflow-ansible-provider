@@ -21,6 +21,10 @@ classifiers = [
 ]
 dependencies = [
     "apache-airflow >= 2.0.0",
+    "ansible-runner >= 2.0.0",
+    "ansible >= 6.0.0",
+    "packaging",
+    "boto3",
 ]
 
 [project.optional-dependencies]
@@ -44,4 +48,4 @@ where = ["src"]
 version = {attr = "airflow_ansible_provider.VERSION"}
 
 [project.entry-points."airflow.plugins"]
-airflow_ansible_plugin = "airflow_ansible_plugin.plugins:AirflowAnsiblePlugin"
+airflow_ansible_plugin = "airflow_ansible_provider.plugins:AirflowAnsiblePlugin"
