@@ -1,0 +1,10 @@
+---
+services:
+  airflow:
+    image: ansible/airflow:${PKG_VERSION}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        AIRFLOW_VERSION: ${AIRFLOW_VERSION}
+        PKG_VERSION: ${PKG_VERSION}

@@ -4,8 +4,8 @@
 import sys
 from packaging import version
 
-VERSION = "0.5.0"
-VERSIONs = ["0.3.0", "0.4.0", "0.4.1", "0.4.2", VERSION]
+VERSION = "0.6.0"
+VERSIONs = ["0.3.0", "0.4.0", "0.4.1", "0.4.2", "0.5.0", VERSION]
 
 # Airflow 版本检测
 try:
