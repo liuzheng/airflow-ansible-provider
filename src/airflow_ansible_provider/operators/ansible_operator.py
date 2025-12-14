@@ -39,11 +39,9 @@ from airflow_ansible_provider.compat import (
 # 其他必要导入
 import boto3
 import hashlib as hashlib_wrapper
-from ansible_runner import init_runner
-from ansible_runner.config import ExecutionMode
+import ansible_runner
 from airflow.exceptions import AirflowException
 from airflow.models import Variable, Connection
-from airflow.utils.context import apply_lineage
 from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
 
 from botocore.config import Config
@@ -64,15 +62,6 @@ ANSIBLE_EVENT_STATUS = {
     "runner_on_unreachable": "unreachable",
     "on_any": "unknown",
 }
-
-
-def ansible_run(**kwargs):
-    # fix: because when use binary, the execution_mode will be set RAW, which whill not append the playbook into the command, see also ansible_runner.runner_config.RunnerConfig.generate_ansible_command
-    r = init_runner(**kwargs)
-    r.config.command.append(kwargs.get("playbook"))
-    r.config.execution_mode = ExecutionMode.ANSIBLE_PLAYBOOK
-    r.run()
-    return r
 
 
 class AnsibleOperator(PythonVirtualenvOperator):
@@ -461,7 +450,6 @@ class AnsibleOperator(PythonVirtualenvOperator):
             self.tags,
             self.skip_tags,
         )
-        ansible_binary = "/home/airflow/.local/bin/ansible-playbook"
         if self._bin_path is not None:
             ansible_binary = self._bin_path / "ansible-playbook"
             if not (
@@ -470,7 +458,6 @@ class AnsibleOperator(PythonVirtualenvOperator):
                 and os.access(ansible_binary, os.X_OK)
             ):
                 ansible_binary = "/home/airflow/.local/bin/ansible-playbook"
-        # r = ansible_run(
         r = ansible_runner.run(
             binary=ansible_binary,
             cmdline=self.playbook,  # fix: ansible_runner.run ExecutionMode.RAW for binary is set
@@ -624,7 +611,6 @@ class AnsibleOperator(PythonVirtualenvOperator):
         context["ti"].xcom_push(key="s3_path_url", value=context["s3_path_url"])
         self.log.info("Uploaded artifact to s3: %s", context["s3_path_url"])
 
-    @apply_lineage
     def post_execute(self, context: Any, result: Any = None):
         """
         Execute right after self.execute() is called.
