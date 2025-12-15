@@ -27,10 +27,6 @@ dependencies = [
     "boto3",
 ]
 
-[project.optional-dependencies]
-airflow-2 = ["apache-airflow >= 2.0.0, < 3.0.0"]
-airflow-3 = ["apache-airflow >= 3.0.0"]
-
 [project.urls]
 "Homepage" = "https://github.com/liuzheng/airflow-ansible-provider"
 "Bug Tracker" = "https://github.com/liuzheng/airflow-ansible-provider/issues"

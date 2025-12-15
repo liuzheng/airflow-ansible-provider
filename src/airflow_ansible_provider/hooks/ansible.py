@@ -22,9 +22,6 @@ from __future__ import annotations
 import os
 import warnings
 
-# 使用兼容性模块
-from airflow_ansible_provider.compat import BaseHook
-
 # from base64 import decodebytes
 from collections.abc import Sequence
 from functools import cached_property
@@ -32,24 +29,31 @@ from io import StringIO
 from typing import Any
 
 import paramiko
+from airflow.exceptions import AirflowException
+from airflow.utils.platform import getuser
 from paramiko.config import SSH_PORT
 from sshtunnel import SSHTunnelForwarder
 from tenacity import Retrying, stop_after_attempt, wait_fixed, wait_random
 
-from airflow.exceptions import AirflowException
-from airflow.utils.platform import getuser
-from airflow.utils.types import NOTSET, ArgNotSet
-from airflow.utils.log.secrets_masker import mask_secret
+from airflow_ansible_provider import IS_AIRFLOW_3_PLUS
+
+if IS_AIRFLOW_3_PLUS:
+    from airflow.sdk import BaseHook
+else:
+    # 降级到 2.x
+    from airflow.hooks.base_hook import BaseHook
+# from airflow.utils.types import NOTSET, ArgNotSet
+# from airflow.utils.log.secrets_masker import mask_secret
 
 TIMEOUT_DEFAULT = 10
 CMD_TIMEOUT = 10
 CONNECTION_TIMEOUT = 10
-KEEPALIVE_INTERVAL = 30
-BANNER_TIMEOUT = 30.0
+KEEP_ALIVE_INTERVAL = 30
+BANNER_TIMEOUT = 30
 AUTH_TIMEOUT = 120
 
 ANSIBLE_ARTIFACT_DIR = "/tmp/ansible/"
-ANSIBLE_PLYBOOK_DIR = "/opt/airflow/ansible_playbook/"
+ANSIBLE_PLAYBOOK_DIR = "/opt/airflow/ansible_playbook/"
 
 
 class AnsibleHook(BaseHook):
@@ -71,8 +75,13 @@ class AnsibleHook(BaseHook):
     :param cmd_timeout: timeout (in seconds) for executing the command. The default is 10 seconds.
         Nullable, `None` means no timeout. If provided, it will replace the `cmd_timeout`
         which was predefined in the connection of `ssh_conn_id`.
-    :param keepalive_interval: send a keepalive packet to remote host every
-        keepalive_interval seconds
+    :param # The code `keep_alive_interval` appears to be a variable name in Python. It is not
+    # assigned any value or used in any operation in the provided snippet, so it is difficult
+    # to determine its specific purpose without additional context. It seems like it might be
+    # intended to store a value related to keeping a connection alive at regular intervals, but
+    # without more information, its exact functionality cannot be determined.
+    keep_alive_interval: send a keep_alive packet to remote host every
+        keep_alive_interval seconds
     :param banner_timeout: timeout to wait for banner from the server in seconds
     :param disabled_algorithms: dictionary mapping algorithm type to an
         iterable of algorithm identifiers, which will be disabled for the
@@ -86,12 +95,10 @@ class AnsibleHook(BaseHook):
         paramiko.RSAKey,
         paramiko.ECDSAKey,
         paramiko.Ed25519Key,
-        paramiko.DSSKey,
     )
 
     _host_key_mappings = {
         "rsa": paramiko.RSAKey,
-        "dss": paramiko.DSSKey,
         "ecdsa": paramiko.ECDSAKey,
         "ed25519": paramiko.Ed25519Key,
     }
@@ -102,8 +109,8 @@ class AnsibleHook(BaseHook):
     hook_name = "Ansible"
 
     @classmethod
-    def get_ui_field_behaviour(cls) -> dict[str, Any]:
-        """Return custom UI field behaviour for SSH connection."""
+    def get_ui_field_behavior(cls) -> dict[str, Any]:
+        """Return custom UI field behavior for SSH connection."""
         return {
             "hidden_fields": [
                 "schema",
@@ -119,72 +126,72 @@ class AnsibleHook(BaseHook):
     def get_connection_form_widgets(cls) -> dict[str, Any]:
         """Returns connection widgets to add to connection form."""
         from flask_appbuilder.fieldwidgets import (
-            BS3TextFieldWidget,
             BS3PasswordFieldWidget,
             BS3TextAreaFieldWidget,
+            BS3TextFieldWidget,
         )
         from flask_babel import lazy_gettext
-        from wtforms import StringField, IntegerField
+        from wtforms import IntegerField, StringField
         from wtforms.validators import NumberRange
 
         return {
             "ansible_playbook_directory": StringField(
-                name=lazy_gettext("Ansible Playbook Directory"),
+                name=lazy_gettext("Ansible Playbook Directory").__str__(),
                 widget=BS3TextFieldWidget(),
             ),
             "ansible_artifact_directory": StringField(
-                name=lazy_gettext("Ansible Artifact Directory"),
+                name=lazy_gettext("Ansible Artifact Directory").__str__(),
                 widget=BS3TextFieldWidget(),
             ),
             "port": IntegerField(
-                name=lazy_gettext("Port"),
+                name=lazy_gettext("Port").__str__(),
                 default=SSH_PORT,
-                description=lazy_gettext("The SSH port to connect to"),
+                description=lazy_gettext("The SSH port to connect to").__str__(),
                 validators=[NumberRange(min=1, max=65535)],
             ),
             "private_key": StringField(
-                name=lazy_gettext("Private Key Data"),
+                name=lazy_gettext("Private Key Data").__str__(),
                 widget=BS3TextAreaFieldWidget(),
             ),
             "private_key_passphrase": StringField(
-                name=lazy_gettext("Private Key Passphrase"),
+                name=lazy_gettext("Private Key Passphrase").__str__(),
                 widget=BS3PasswordFieldWidget(),
             ),
             "conn_timeout": IntegerField(
-                name=lazy_gettext("Connection Timeout (s)"),
+                name=lazy_gettext("Connection Timeout (s)").__str__(),
                 validators=[NumberRange(min=0, max=3600)],
                 default=TIMEOUT_DEFAULT,
             ),
             "cmd_timeout": IntegerField(
-                name=lazy_gettext("Command Timeout (s)"),
+                name=lazy_gettext("Command Timeout (s)").__str__(),
                 validators=[NumberRange(min=0, max=3600)],
                 default=CMD_TIMEOUT,
             ),
-            "keepalive_interval": IntegerField(
-                name=lazy_gettext("Keepalive Interval (s)"),
+            "keep_alive_interval": IntegerField(
+                name=lazy_gettext("Keep Alive Interval (s)").__str__(),
                 validators=[NumberRange(min=0, max=3600)],
-                default=KEEPALIVE_INTERVAL,
+                default=KEEP_ALIVE_INTERVAL,
             ),
             "banner_timeout": IntegerField(
-                name=lazy_gettext("Banner Timeout (s)"),
+                name=lazy_gettext("Banner Timeout (s)").__str__(),
                 validators=[NumberRange(min=0, max=3600)],
                 default=BANNER_TIMEOUT,
             ),
             "auth_timeout": IntegerField(
-                name=lazy_gettext("Authentication Timeout (s)"),
+                name=lazy_gettext("Authentication Timeout (s)").__str__(),
                 validators=[NumberRange(min=0, max=3600)],
                 default=AUTH_TIMEOUT,
             ),
             "host_proxy_cmd": StringField(
-                name=lazy_gettext("Host Proxy Command"),
+                name=lazy_gettext("Host Proxy Command").__str__(),
                 widget=BS3TextFieldWidget(),
             ),
             "ciphers": StringField(
-                name=lazy_gettext("Ciphers"),
+                name=lazy_gettext("Ciphers").__str__(),
                 widget=BS3TextFieldWidget(),
             ),
             "disabled_algorithms": StringField(
-                name=lazy_gettext("Disabled Algorithms"),
+                name=lazy_gettext("Disabled Algorithms").__str__(),
                 widget=BS3TextAreaFieldWidget(),
             ),
         }
@@ -200,7 +207,7 @@ class AnsibleHook(BaseHook):
         port: int = SSH_PORT,
         conn_timeout: int = CONNECTION_TIMEOUT,
         cmd_timeout: int = CMD_TIMEOUT,
-        keepalive_interval: int = KEEPALIVE_INTERVAL,
+        keep_alive_interval: int = KEEP_ALIVE_INTERVAL,
         banner_timeout: float = BANNER_TIMEOUT,
         disabled_algorithms: dict | None = None,
         ciphers: list[str] | None = None,
@@ -220,18 +227,14 @@ class AnsibleHook(BaseHook):
         self.port = port
         self.conn_timeout = conn_timeout
         self.cmd_timeout = cmd_timeout
-        self.keepalive_interval = keepalive_interval
+        self.keep_alive_interval = keep_alive_interval
         self.banner_timeout = banner_timeout
         self.disabled_algorithms = disabled_algorithms
         self.ciphers = ciphers
         self.host_proxy_cmd = host_proxy_cmd
         self.auth_timeout = auth_timeout
-        self.ansible_playbook_directory = (
-            ansible_playbook_directory or ANSIBLE_PLYBOOK_DIR
-        )
-        self.ansible_artifact_directory = (
-            ansible_artifact_directory or ANSIBLE_ARTIFACT_DIR
-        )
+        self.ansible_playbook_directory = ansible_playbook_directory or ANSIBLE_PLAYBOOK_DIR
+        self.ansible_artifact_directory = ansible_artifact_directory or ANSIBLE_ARTIFACT_DIR
 
         # Default values, overridable from Connection
         self.compress = True
@@ -261,7 +264,7 @@ class AnsibleHook(BaseHook):
                     "private_key_passphrase",
                     "conn_timeout",
                     "cmd_timeout",
-                    "keepalive_interval",
+                    "keep_alive_interval",
                     "banner_timeout",
                     "auth_timeout",
                     "host_proxy_cmd",
@@ -370,12 +373,10 @@ class AnsibleHook(BaseHook):
         cmd = self.host_proxy_cmd
         return paramiko.ProxyCommand(cmd) if cmd else None
 
-    def get_conn(self) -> paramiko.SSHClient:
+    def get_conn(self) -> paramiko.SSHClient | None:
         """Establish an SSH connection to the remote host."""
         if not self.remote_host:
-            warnings.warn(
-                "remote_host is not provided. We can not provide the ssh client."
-            )
+            warnings.warn("remote_host is not provided. We can not provide the ssh client.")
             return None
         if self.client:
             transport = self.client.get_transport()
@@ -410,9 +411,7 @@ class AnsibleHook(BaseHook):
             # Get host key from connection extra if it not set or None then we fallback to system host keys
             client_host_keys = client.get_host_keys()
             if self.port == SSH_PORT:
-                client_host_keys.add(
-                    self.remote_host, self.host_key.get_name(), self.host_key
-                )
+                client_host_keys.add(self.remote_host, self.host_key.get_name(), self.host_key)
             else:
                 client_host_keys.add(
                     f"[{self.remote_host}]:{self.port}",
@@ -457,10 +456,10 @@ class AnsibleHook(BaseHook):
             with attempt:
                 client.connect(**connect_kwargs)
 
-        if self.keepalive_interval:
+        if self.keep_alive_interval:
             # MyPy check ignored because "paramiko" isn't well-typed. The `client.get_transport()` returns
-            # type "Transport | None" and item "None" has no attribute "set_keepalive".
-            client.get_transport().set_keepalive(self.keepalive_interval)  # type: ignore[union-attr]
+            # type "Transport | None" and item "None" has no attribute "set_keep_alive".
+            client.get_transport().set_keep_alive(self.keep_alive_interval)  # type: ignore[union-attr]
 
         if self.ciphers:
             # MyPy check ignored because "paramiko" isn't well-typed. The `client.get_transport()` returns
@@ -527,20 +526,16 @@ class AnsibleHook(BaseHook):
         :raises AirflowException: if key cannot be read
         """
         if len(private_key.splitlines()) < 2:
-            raise AirflowException(
-                "Key must have BEGIN and END header/footer on separate lines."
-            )
+            raise AirflowException("Key must have BEGIN and END header/footer on separate lines.")
 
         for pkey_class in self._pkey_loaders:
             try:
-                key = pkey_class.from_private_key(
-                    StringIO(private_key), password=passphrase
-                )
+                key = pkey_class.from_private_key(StringIO(private_key), password=passphrase)
                 # Test it actually works. If Paramiko loads an openssh generated key, sometimes it will
                 # happily load it as the wrong type, only to fail when actually used.
                 key.sign_ssh_data(b"")
                 return key
-            except (paramiko.ssh_exception.SSHException, ValueError):
+            except (paramiko.SSHException, ValueError):
                 continue
         raise AirflowException(
             "Private key provided cannot be read by paramiko."
@@ -551,8 +546,10 @@ class AnsibleHook(BaseHook):
     def test_connection(self) -> tuple[bool, str]:
         """Test the ssh connection by execute remote bash commands."""
         try:
-            with self.get_conn() as conn:
-                conn.exec_command("pwd")
+            conn = self.get_conn()
+            if conn is None:
+                return False, "Cannot establish connection: remote_host is not provided"
+            conn.exec_command("pwd")
             return True, "Connection successfully tested"
         except Exception as e:
             return False, str(e)

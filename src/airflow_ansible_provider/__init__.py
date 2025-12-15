@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
+
 from packaging import version
 
 VERSION = "0.6.0"
@@ -9,13 +10,19 @@ VERSIONs = ["0.3.0", "0.4.0", "0.4.1", "0.4.2", "0.5.0", VERSION]
 
 # Airflow 版本检测
 try:
-    import airflow
 
-    AIRFLOW_VERSION = version.parse(airflow.__version__)
-    IS_AIRFLOW_3_PLUS = AIRFLOW_VERSION >= version.parse("3.0.0")
+    from airflow import __version__
+    from packaging.version import Version
+
+    AIRFLOW_VERSION = Version(__version__)
+    IS_AIRFLOW_3_PLUS = (AIRFLOW_VERSION.major, AIRFLOW_VERSION.minor, AIRFLOW_VERSION.micro) >= (
+        3,
+        0,
+        0,
+    )
 except ImportError:
-    # 如果无法导入 airflow，默认为 False
-    IS_AIRFLOW_3_PLUS = False
+    # 如果无法导入 airflow，默认为 True
+    IS_AIRFLOW_3_PLUS = True
     AIRFLOW_VERSION = None
 
 
