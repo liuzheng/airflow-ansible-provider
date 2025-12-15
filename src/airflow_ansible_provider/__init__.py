@@ -15,14 +15,18 @@ try:
     from packaging.version import Version
 
     AIRFLOW_VERSION = Version(__version__)
-    IS_AIRFLOW_3_PLUS = (AIRFLOW_VERSION.major, AIRFLOW_VERSION.minor, AIRFLOW_VERSION.micro) >= (
+    IS_AIRFLOW_3_PLUS = (
+        AIRFLOW_VERSION.major,
+        AIRFLOW_VERSION.minor,
+        AIRFLOW_VERSION.micro,
+    ) >= (
         3,
         0,
         0,
     )
 except ImportError:
-    # 如果无法导入 airflow，默认为 True
-    IS_AIRFLOW_3_PLUS = True
+    # 如果无法导入 airflow，默认为 False
+    IS_AIRFLOW_3_PLUS = False
     AIRFLOW_VERSION = None
 
 
