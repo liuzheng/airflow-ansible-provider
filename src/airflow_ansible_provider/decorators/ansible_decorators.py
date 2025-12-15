@@ -3,26 +3,27 @@ from __future__ import annotations
 import warnings
 from typing import Any, Callable, Mapping, Sequence
 
-from airflow_ansible_provider import IS_AIRFLOW_3_PLUS
-
 from airflow.utils.context import context_merge
 from airflow.utils.operator_helpers import determine_kwargs
+from airflow_ansible_provider import IS_AIRFLOW_3_PLUS
+from airflow_ansible_provider.operators.ansible_operator import AnsibleOperator
 
 if IS_AIRFLOW_3_PLUS:
-    from airflow.sdk.bases.decorator import (DecoratedOperator, TaskDecorator,
-                                             task_decorator_factory)
+    from airflow.sdk.bases.decorator import (
+        DecoratedOperator,
+        TaskDecorator,
+        task_decorator_factory,
+    )
     from airflow.sdk.bases.operator import BaseOperator
     from airflow.sdk.definitions.context import Context
 else:
-    from airflow.utils.context import Context
-    from airflow.models.baseoperator import BaseOperator
     from airflow.decorators.base import (
         DecoratedOperator,
         TaskDecorator,
         task_decorator_factory,
     )
-
-from airflow_ansible_provider.operators.ansible_operator import AnsibleOperator
+    from airflow.models.baseoperator import BaseOperator
+    from airflow.utils.context import Context
 
 
 class AnsibleDecoratedOperator(DecoratedOperator, AnsibleOperator):
@@ -39,7 +40,9 @@ class AnsibleDecoratedOperator(DecoratedOperator, AnsibleOperator):
 
     custom_operator_name: str = "@task.ansible"
 
-    def __init__(self, python_callable,op_args,op_kwargs: Mapping[str, Any], **kwargs) -> None:
+    def __init__(
+        self, python_callable, op_args, op_kwargs: Mapping[str, Any], **kwargs
+    ) -> None:
         if kwargs.pop("multiple_outputs", None):
             warnings.warn(
                 f"`multiple_outputs=True` is not supported in {self.custom_operator_name} tasks. Ignoring.",
@@ -72,7 +75,8 @@ class AnsibleDecoratedOperator(DecoratedOperator, AnsibleOperator):
             python_callable=python_callable,
             op_args=op_args,
             op_kwargs=op_kwargs,
-            **kwargs)
+            **kwargs,
+        )
         self.log.debug("AnsibleDecoratedOperator kwargs: %s", kwargs)
 
     def execute(self, context: Context) -> Any:

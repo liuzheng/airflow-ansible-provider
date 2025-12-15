@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import datetime
+import hashlib as hashlib_wrapper
 import json
 import os
 import sys
@@ -27,14 +28,18 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Collection, Iterable, Mapping, Sequence, Tuple, Union
 
-import ansible_runner
-from airflow_ansible_provider import IS_AIRFLOW_3_PLUS
-
 import airflow.models.xcom_arg
+import ansible_runner
+import boto3
+from airflow.exceptions import AirflowException
+from airflow.models import Connection, Variable
+from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
+from airflow_ansible_provider import IS_AIRFLOW_3_PLUS
+from airflow_ansible_provider.hooks.ansible import AnsibleHook
+from botocore.config import Config
 
 if IS_AIRFLOW_3_PLUS:
-    from airflow.providers.standard.operators.python import \
-        PythonVirtualenvOperator
+    from airflow.providers.standard.operators.python import PythonVirtualenvOperator
     from airflow.sdk.definitions.context import Context
 
     def prepare_lineage(func):
@@ -42,24 +47,15 @@ if IS_AIRFLOW_3_PLUS:
 
 else:
     # 降级到 2.x
+    from airflow.lineage.decorators import prepare_lineage
     from airflow.operators.python_operator import PythonVirtualenvOperator
     from airflow.utils.context import Context
-    from airflow.lineage.decorators import prepare_lineage
 
-import hashlib as hashlib_wrapper
-
-import ansible_runner
-# 其他必要导入
-import boto3
-from airflow_ansible_provider.hooks.ansible import AnsibleHook
-from botocore.config import Config
-
-from airflow.exceptions import AirflowException
-from airflow.models import Connection, Variable
-from airflow.utils.process_utils import execute_in_subprocess_with_kwargs
 
 ALL_KEYS = {}
-ANSIBLE_PRIVATE_DATA_DIR = "/tmp/ansible_runner" or os.environ.get("ANSIBLE_PRIVATE_DATA_DIR")
+ANSIBLE_PRIVATE_DATA_DIR = "/tmp/ansible_runner" or os.environ.get(
+    "ANSIBLE_PRIVATE_DATA_DIR"
+)
 
 ANSIBLE_EVENT_STATUS = {
     "playbook_on_start": "running",
@@ -178,8 +174,8 @@ class AnsibleOperator(PythonVirtualenvOperator):
         **kwargs,
     ) -> None:
         super().__init__(
-          python_callable=python_callable,
-          requirements=requirements,
+            python_callable=python_callable,
+            requirements=requirements,
             system_site_packages=True,  # todo: 当前有些问题，只能true
             venv_cache_path=venv_cache_path,
             pip_install_options=[
@@ -231,7 +227,9 @@ class AnsibleOperator(PythonVirtualenvOperator):
         self.extravars["ansible_port"] = self._ansible_hook.port
         self.extravars["ansible_connection"] = "ssh"
         self.project_dir = project_dir or self._ansible_hook.ansible_playbook_directory
-        self.artifact_dir = artifact_dir or self._ansible_hook.ansible_artifact_directory
+        self.artifact_dir = (
+            artifact_dir or self._ansible_hook.ansible_artifact_directory
+        )
         if self.playbook_yaml:
             self._tmp_playbook = TemporaryDirectory(prefix="temp-playbook-")
 
@@ -243,7 +241,9 @@ class AnsibleOperator(PythonVirtualenvOperator):
         self.log.info("event: %s", self.last_event)
         if not self._runner_ident and data.get("runner_ident"):
             # 执行过程中先获取到 runner_ident，便于日志即时观察输出
-            self._context["ti"].xcom_push(key="runner_id", value=data.get("runner_ident"))
+            self._context["ti"].xcom_push(
+                key="runner_id", value=data.get("runner_ident")
+            )
             self._runner_ident = data.get("runner_ident")
 
     def _calculate_cache_hash(self) -> Tuple[str, str]:
@@ -304,7 +304,9 @@ class AnsibleOperator(PythonVirtualenvOperator):
                         else None
                     ),
                 )
-            self._collections_paths.append(str(self._env_dir / ".ansible" / "collections"))
+            self._collections_paths.append(
+                str(self._env_dir / ".ansible" / "collections")
+            )
 
     @prepare_lineage
     def pre_execute(self, context: Context):
@@ -397,16 +399,18 @@ class AnsibleOperator(PythonVirtualenvOperator):
                 if "vars" in group_data:
                     # 默认不允许用户传递"ansible_ssh_common_args"参数
                     if "ansible_ssh_common_args" in group_data.get("vars", {}):
-                        del self.inventory[group_name]["vars"]["ansible_ssh_common_args"]
+                        del self.inventory[group_name]["vars"][
+                            "ansible_ssh_common_args"
+                        ]
                     # 仅当主机变量中存在特殊 idc 时配置ansible_ssh_common_args参数
                     if "idc" in group_data["vars"] and Variable.get(
                         "SSH_COMMON_ARGS-" + group_data["vars"]["idc"], default_var=None
                     ):
-                        self.inventory[group_name]["vars"]["ansible_ssh_common_args"] = (
-                            Variable.get(
-                                "SSH_COMMON_ARGS-" + group_data["vars"]["idc"],
-                                default_var=None,
-                            )
+                        self.inventory[group_name]["vars"][
+                            "ansible_ssh_common_args"
+                        ] = Variable.get(
+                            "SSH_COMMON_ARGS-" + group_data["vars"]["idc"],
+                            default_var=None,
                         )
             # inventory全局变量
             self.inventory["all"] = {
@@ -416,13 +420,21 @@ class AnsibleOperator(PythonVirtualenvOperator):
                 self.inventory["all"]["vars"]["ansible_become"] = True
                 self.inventory["all"]["vars"]["ansible_become_user"] = self.become_user
                 if self.become_method is not None:
-                    self.inventory["all"]["vars"]["ansible_become_method"] = self.become_method
+                    self.inventory["all"]["vars"][
+                        "ansible_become_method"
+                    ] = self.become_method
                 if self.become_password is not None:
-                    self.inventory["all"]["vars"]["ansible_become_password"] = self.become_password
+                    self.inventory["all"]["vars"][
+                        "ansible_become_password"
+                    ] = self.become_password
                 if self.become_exe is not None:
-                    self.inventory["all"]["vars"]["ansible_become_exe"] = self.become_exe
+                    self.inventory["all"]["vars"][
+                        "ansible_become_exe"
+                    ] = self.become_exe
                 if self.become_flags is not None:
-                    self.inventory["all"]["vars"]["ansible_become_flags"] = self.become_flags
+                    self.inventory["all"]["vars"][
+                        "ansible_become_flags"
+                    ] = self.become_flags
         # tip: this will default inventory was a str for path, cannot pass it as ini
         if isinstance(self.inventory, str):
             self.inventory = os.path.join(self.project_dir, self.path, self.inventory)
@@ -565,12 +577,16 @@ class AnsibleOperator(PythonVirtualenvOperator):
         #     self.artifact_dir, f"{context['ansible_return']['ident']}", "command"
         # ) # 由于其存在敏感信息以及无必要长期存储的需求，暂时不存储
 
-        zip_file = os.path.join(zip_dir, f"ansible-{context['ansible_return']['ident']}.zip")
+        zip_file = os.path.join(
+            zip_dir, f"ansible-{context['ansible_return']['ident']}.zip"
+        )
 
         with zipfile.ZipFile(zip_file, "w") as z:
             z.write(params_file_path, arcname=os.path.basename(params_file_path))
             z.write(ansible_return_path, arcname=os.path.basename(ansible_return_path))
-            z.write(ansible_inventory_file, arcname=os.path.basename(ansible_inventory_file))
+            z.write(
+                ansible_inventory_file, arcname=os.path.basename(ansible_inventory_file)
+            )
             z.write(ansible_stdout_file, arcname=os.path.basename(ansible_stdout_file))
             z.write(ansible_stderr_file, arcname=os.path.basename(ansible_stderr_file))
             z.write(ansible_rc_file, arcname=os.path.basename(ansible_rc_file))
